@@ -41,14 +41,14 @@ AgentDash est une app macOS native (Swift/SwiftUI, Apple Silicon, macOS 14+) qui
                                                       │  ┌──────▼──────────────────────────────────────┐        │
                                                       │  │           STORES @Observable (@MainActor)   │        │
                                                       │  │ SessionStore · PromptStore · UsageStore ·   │        │
-                                                      │  │ ServerStore · SettingsStore · LicenseStore ·│        │
+                                                      │  │ ServerStore · SettingsStore ·               │        │
                                                       │  │ NotificationCenter interne · DoctorStore    │        │
                                                       │  └──────┬───────────────────┬──────────────────┘        │
                                                       │         │ observation      │ observation               │
                                                       │  ┌──────▼───────┐   ┌──────▼───────┐  ┌─────────────┐  │
                                                       │  │ NotchUI      │   │ MenuBarUI    │  │ SettingsUI  │  │
                                                       │  │ (NSPanel non │   │ (NSStatusItem│  │ Onboarding  │  │
-                                                      │  │  activant)   │   │  + NSPopover)│  │ What's New  │  │
+                                                      │  │  activant)   │   │  + NSPopover)│  │             │  │
                                                       │  └──────────────┘   └──────────────┘  └─────────────┘  │
                                                       └─────────────────────────────────────────────────────────┘
 
@@ -79,7 +79,7 @@ Flux « Act » (permission/question/plan) :
 | Cible de déploiement | **macOS 14.0, arm64 uniquement** | C'est le contrat produit d'AgentPeek (§1 features). macOS 14 donne `@Observable`, `SMAppService` (13+), CryptoKit, Network.framework. **Liquid Glass (`glassEffect`/`NSGlassEffectView`) exige macOS 26** (VÉRIFIÉ) : on ne monte PAS la cible pour un matériau — fallback `NSVisualEffectView` (`.hudWindow`, `.behindWindow`, `.active`) + couche `Color.black.opacity(slider)` derrière un modificateur maison `agentGlass()` avec branche `#available(macOS 26.0, *)`. Décision documentée ici, comme demandé. |
 | Sandbox | **Pas d'App Sandbox** ; hardened runtime + Developer ID + notarisation | libproc, `kill()`, écriture de `~/.claude/settings.json`, socket partagé : tous incompatibles sandbox (VÉRIFIÉ — tous les prototypes ont tourné sans aucune permission TCC). Distribution hors Mac App Store, DMG signé/notarisé (comme AgentPeek). |
 | Gestion de projet | **Un projet Xcode `AgentDash.xcodeproj`** (2 cibles : app + `agentdash-hook`) + **packages SPM locaux** dans `Packages/` pour tout le reste | Compile incrémentale par module, frontières de dépendances imposées par SPM, testabilité (chaque package a sa cible de tests), et le binaire hook reste une cible Xcode pour être signé/embarqué dans le bundle (`Contents/Helpers/`). |
-| Dépendances tierces | **Sparkle 2 (SPM, version épinglée `exact:`)**, **KeyboardShortcuts** (raccourcis personnalisables, Carbon sans TCC), **SQLite3 système** (module map, pas de wrapper lourd type GRDB) | Minimalisme : chaque dépendance est un risque de notarisation et de poids. SQLite en C direct suffit pour des lectures ciblées par clé sur `state.vscdb`. |
+| Dépendances tierces | **KeyboardShortcuts** (raccourcis personnalisables, Carbon sans TCC), **SQLite3 système** (module map, pas de wrapper lourd type GRDB) | Minimalisme : chaque dépendance est un risque de notarisation et de poids. SQLite en C direct suffit pour des lectures ciblées par clé sur `state.vscdb`. (Sparkle 2 — supprimé, décision one-shot du 3 juillet 2026 : mise à jour manuelle, cf. A11.) |
 | Transport des hooks | **Binaire compagnon + socket UNIX pour les DEUX agents** (pas de hooks `type:"http"` Claude) | Cursor ne supporte que des hooks `command` : le binaire est de toute façon obligatoire pour Cursor. Un canal unique = un seul protocole, un seul point de panne, un seul check Doctor. Latences mesurées (spawn 2,7 ms + IPC 0,65 ms) rendent l'avantage du HTTP négligeable. Le type `http` de Claude Code reste un plan B documenté si le binaire posait un problème Gatekeeper (hypothèse n°4 de system-integration). |
 | Rendu Markdown | `AttributedString(markdown:)` natif + fallback texte brut | Suffisant pour les extraits de réponses ; pas de dépendance de rendu. À réévaluer si les tableaux/code blocks exigent mieux (cmark-gfm en plan B). |
 
@@ -91,7 +91,7 @@ Flux « Act » (permission/question/plan) :
 
 | Module | Type | Responsabilités | Dépend de |
 |---|---|---|---|
-| **AgentDashApp** | cible app Xcode | `@main`, AppDelegate, composition root (injection des stores), cycle de vie fenêtres, Sparkle (`SPUStandardUpdaterController`), notifications `UNUserNotificationCenter`, hotkeys éphémères | tous les packages |
+| **AgentDashApp** | cible app Xcode | `@main`, AppDelegate, composition root (injection des stores), cycle de vie fenêtres, notifications `UNUserNotificationCenter`, hotkeys éphémères | tous les packages |
 | **HookRelay** | cible CLI Xcode (`agentdash-hook`) | lire stdin JSON → envelopper (`{v, id, source, event, term_program, ppid, cwd}`) → socket → écrire la réponse sur stdout ; `.waiting`/erreur → exit 0 sans sortie. **Zéro logique de décision.** Ne dépend que de Darwin/Foundation (taille et spawn minimaux) | — (autonome) |
 | **DashCore** | SPM | modèles du domaine (cf. `02-data-model.md`), protocole IPC (`HookEnvelope`, `HookDecision`), `EventRouter`, machine à états `SessionState`, stores `@Observable`, `HookServer` (NWListener), `TranscriptTailer` générique (FSEvents + offsets), logging (`DashLog`), protocoles `AgentProvider`/`UsageProvider` | — |
 | **AgentClaude** | SPM | installeur/réparateur de hooks `~/.claude/settings.json` (fusion non destructive, marqueur), parseur des transcripts JSONL (dédup `requestId`, `structuredPatch`, subagents `isSidechain`), registre `~/.claude/sessions/<pid>.json` + liveness PID, lecture Keychain `Claude Code-credentials`, poller `GET /api/oauth/usage` (headers `anthropic-beta` + `User-Agent: claude-code/<version>`) | DashCore |
@@ -100,15 +100,15 @@ Flux « Act » (permission/question/plan) :
 | **UsageKit** | SPM | agrégation des fenêtres (5 h/7 j/mensuel), logique de jauges batterie et de seuils, rétention de la dernière valeur en cas d'échec, reset au rollover, stats journalières (parsing JSONL Claude + dailyStats Cursor), alertes de budget | DashCore (consomme les `UsageProvider` de AgentClaude/AgentCursor via injection) |
 | **NotchUI** | SPM | `NotchPanel` (NSPanel), `NotchShape` animable, pill/panel, hover à délai d'intention, fermeture au clic extérieur, avatars pixel-grid (`TimelineView`+`Canvas`), cartes de session, timeline, prompts inline, Quick Routes, Fast Actions, `agentGlass()` | DashCore |
 | **MenuBarUI** | SPM | `NSStatusItem` variableLength + `NSHostingView`, point orange, clic droit → Quit, `NSPopover` `.transient` | DashCore |
-| **SettingsKit** | SPM | fenêtre Settings (sidebar : General/Notifications/Appearance/Usage/Shortcuts/Doctor/About), onboarding welcome, fenêtre What's New, écran d'achat | DashCore, DoctorKit, LicensingKit |
-| **LicensingKit** | SPM | trial 48 h (double stockage Keychain+fichier, HMAC, high-water mark + `mach_continuous_time()`), activation licence (Worker → reçu Ed25519, vérif offline CryptoKit), `LicenseManager` réactif | DashCore |
+| **SettingsKit** | SPM | fenêtre Settings (sidebar : General/Notifications/Appearance/Usage/Shortcuts/Doctor/About), onboarding welcome | DashCore, DoctorKit |
+| **LicensingKit** | — | module supprimé (décision one-shot du 3 juillet 2026 : ni trial, ni licence, ni activation) | — |
 | **DoctorKit** | SPM | checks : hooks présents/intacts, binaire copié + hash, socket joignable, versions minimales des agents, vérification croisée `lsof -F`, budgets RAM/CPU (`task_info`), export de logs | DashCore, AgentClaude, AgentCursor, ServersKit |
 
 ### 3.2 Règles de dépendances **[TRANCHÉ]**
 
 - `DashCore` ne dépend de **rien** (hors SDK). Tous les types partagés y vivent.
 - `AgentClaude` et `AgentCursor` ne se connaissent pas et ne dépendent d'aucun module UI. Ils implémentent les protocoles de `DashCore` (`AgentProvider`, `UsageProvider`, `HooksInstaller`).
-- Les modules UI (`NotchUI`, `MenuBarUI`, `SettingsKit`) ne dépendent **que** de `DashCore` (+ DoctorKit/LicensingKit pour SettingsKit) : ils observent les stores, jamais les providers directement.
+- Les modules UI (`NotchUI`, `MenuBarUI`, `SettingsKit`) ne dépendent **que** de `DashCore` (+ DoctorKit pour SettingsKit) : ils observent les stores, jamais les providers directement.
 - Seul `AgentDashApp` assemble tout (composition root). Interdiction d'import transverse (vérifiée mécaniquement par SPM).
 - `HookRelay` ne partage **pas de code** avec l'app (duplication assumée de ~30 lignes de framing NDJSON) pour garder un binaire de 56 Ko sans dépendance — le protocole est contractualisé par des tests d'intégration croisés.
 
@@ -121,8 +121,8 @@ macos-ai-dashboard/
 ├── AgentDash.xcodeproj
 ├── Apps/
 │   ├── AgentDash/                 # cible app : @main, AppDelegate, Info.plist, entitlements,
-│   │   ├── Sources/               #   composition root, Sparkle, notifications, hotkeys
-│   │   └── Resources/             # Assets.xcassets, CHANGELOG.md embarqué (What's New)
+│   │   ├── Sources/               #   composition root, notifications, hotkeys
+│   │   └── Resources/             # Assets.xcassets
 │   └── HookRelay/
 │       └── Sources/main.swift     # agentdash-hook (autonome)
 ├── Packages/
@@ -134,11 +134,9 @@ macos-ai-dashboard/
 │   ├── NotchUI/        Sources/ + Tests/
 │   ├── MenuBarUI/      Sources/
 │   ├── SettingsKit/    Sources/
-│   ├── LicensingKit/   Sources/ + Tests/
 │   └── DoctorKit/      Sources/ + Tests/
 ├── ci/                            # ExportOptions.plist, workflow release (macos-26)
-├── scripts/                       # create-dmg, notarisation, generate_appcast
-└── worker/                        # Cloudflare Worker d'activation (TypeScript)
+└── scripts/                       # create-dmg, notarisation
 ```
 
 ---
