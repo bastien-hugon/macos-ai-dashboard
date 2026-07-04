@@ -1,28 +1,31 @@
 #!/bin/bash
 # Packaging one-shot d'AgentDash (14 · REQ-LIC-39..41) : build release → app signée →
-# DMG. Notarisation optionnelle (si ASC_* fournis). Aucune infra distante (pas d'appcast).
+# DMG stylé. Notarisation optionnelle (scripts/notarize.sh). Aucune infra distante.
 # Usage : scripts/make-dmg.sh
 set -euo pipefail
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH" # create-dmg (Homebrew)
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 "$ROOT/scripts/make-app.sh" release
 APP="$ROOT/build/AgentDash.app"
 DMG="$ROOT/build/AgentDash.dmg"
-VERSION="$(defaults read "$APP/Contents/Info.plist" CFBundleShortVersionString 2>/dev/null || echo 0.0.1)"
+VERSION="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist" 2>/dev/null || echo 0.0.1)"
 
 echo "▸ Version $VERSION"
-
-# DMG via create-dmg si disponible, sinon hdiutil brut.
 rm -f "$DMG"
+
 if command -v create-dmg >/dev/null 2>&1; then
-  echo "▸ create-dmg"
+  echo "▸ create-dmg (stylé)"
   create-dmg \
-    --volname "AgentDash" \
+    --volname "AgentDash $VERSION" \
+    --window-pos 200 120 \
     --window-size 540 380 \
     --icon-size 100 \
-    --icon "AgentDash.app" 140 180 \
-    --app-drop-link 400 180 \
-    "$DMG" "$APP" || true
+    --icon "AgentDash.app" 140 190 \
+    --app-drop-link 400 190 \
+    --hide-extension "AgentDash.app" \
+    --no-internet-enable \
+    "$DMG" "$APP"
 else
   echo "▸ hdiutil (create-dmg absent — brew install create-dmg pour un DMG stylé)"
   STAGE="$(mktemp -d)"
@@ -32,14 +35,7 @@ else
   rm -rf "$STAGE"
 fi
 
-# Notarisation optionnelle (REQ-LIC-40) : nécessite ASC_KEY_ID / ASC_ISSUER_ID / ASC_KEY.
-if [[ -n "${ASC_KEY_ID:-}" && -n "${ASC_ISSUER_ID:-}" && -n "${ASC_KEY:-}" ]]; then
-  echo "▸ notarytool submit"
-  xcrun notarytool submit "$DMG" --key "$ASC_KEY" --key-id "$ASC_KEY_ID" \
-    --issuer "$ASC_ISSUER_ID" --wait
-  xcrun stapler staple "$DMG"
-else
-  echo "▸ notarisation ignorée (ASC_* non fournis) — build utilisable en local ; clic droit → Open à la 1re ouverture"
-fi
+# Notarisation optionnelle (no-op si ASC_* absents).
+"$ROOT/scripts/notarize.sh" "$DMG"
 
-echo "✓ $DMG ($VERSION)"
+echo "✓ $DMG ($VERSION, $(du -h "$DMG" | cut -f1))"

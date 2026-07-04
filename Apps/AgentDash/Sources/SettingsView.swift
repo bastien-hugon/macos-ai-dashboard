@@ -319,10 +319,16 @@ struct SettingsView: View {
 
     // MARK: - About
 
+    private var appVersion: String {
+        let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.1"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "Version \(short) (build \(build))"
+    }
+
     private var aboutTab: some View {
         settingsGroup {
             Text("AgentDash").font(.title2).bold()
-            Text("Version 0.0.1 (build 1)").foregroundStyle(.secondary)
+            Text(appVersion).foregroundStyle(.secondary)
             Divider()
             Text("To update: replace AgentDash.app with a newer build.")
                 .font(.callout)
