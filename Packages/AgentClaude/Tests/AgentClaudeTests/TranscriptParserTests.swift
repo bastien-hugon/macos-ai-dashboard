@@ -101,6 +101,16 @@ struct TranscriptAccumulatorTests {
         #expect(acc.cwd == "/Users/test/Documents/my-project")
     }
 
+    @Test("subagent : ajoute un événement de timeline distinct (REQ-SES-11)")
+    func subagentActivity() {
+        var acc = makeAccumulator(lines: [Fixtures.userPrompt])
+        acc.noteSubagentActivity(file: "/tmp/s-1/subagents/agent-x.jsonl", summary: "Searched files", now: Date())
+        #expect(acc.subagentFiles.count == 1)
+        #expect(acc.lastActivity == "Subagent: Searched files")
+        #expect(acc.timeline.last?.kind == .subagent)
+        #expect(acc.timeline.last?.summary == "Subagent: Searched files")
+    }
+
     @Test("timeline et activité : résumés en langage clair, prompt reset l'extrait")
     func timelineAndActivity() {
         let acc = makeAccumulator(lines: [

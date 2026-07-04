@@ -195,10 +195,12 @@ struct TranscriptAccumulator {
         }
     }
 
-    mutating func noteSubagentActivity(file: String, now: Date) {
+    mutating func noteSubagentActivity(file: String, summary: String?, now: Date) {
         subagentFiles.insert(file)
         lastWriteAt = now
-        lastActivity = "Subagent running"
+        let text = summary.map { "Subagent: \($0)" } ?? "Subagent running"
+        lastActivity = text
+        appendEvent(kind: .subagent, summary: text, id: nil, at: now)
     }
 
     // MARK: - Résumés en langage clair (07 · §3.4, sous-ensemble M1)

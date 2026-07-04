@@ -100,6 +100,7 @@ struct SessionCardView: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color.white.opacity(isExpanded ? 0.07 : 0.045))
         )
+        .depthLitCard(settings.depthLitEnabled) // relief (REQ-NUI-42)
         .opacity(dimmed ? 0.55 : 1)
         .contentShape(RoundedRectangle(cornerRadius: 12))
         // Accessibilité (REQ-NUI-57) : carte = élément unique avec label complet.
@@ -206,9 +207,14 @@ struct SessionCardView: View {
                             Text(event.timestamp, format: .dateTime.hour().minute().second())
                                 .font(.system(size: 9, design: .monospaced))
                                 .foregroundStyle(.white.opacity(0.3))
+                            if event.kind == .subagent {
+                                Image(systemName: "arrow.triangle.branch")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(Color(red: 0.6, green: 0.5, blue: 0.9))
+                            }
                             Text(event.summary)
                                 .font(.system(size: 11))
-                                .foregroundStyle(.white.opacity(0.6))
+                                .foregroundStyle(.white.opacity(event.kind == .subagent ? 0.7 : 0.6))
                                 .lineLimit(1)
                         }
                     }

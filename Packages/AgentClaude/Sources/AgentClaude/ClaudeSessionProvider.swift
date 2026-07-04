@@ -155,7 +155,35 @@ public actor ClaudeSessionProvider {
         let sessionDir = String(path[..<range.lowerBound])
         let parentPath = sessionDir + ".jsonl"
         guard accumulators[parentPath] != nil else { return }
-        accumulators[parentPath]?.noteSubagentActivity(file: path, now: clock.now)
+        // Extrait la dernière action du subagent (dernier tool_use) pour la remonter.
+        let summary = Self.lastSubagentAction(path: path)
+        accumulators[parentPath]?.noteSubagentActivity(file: path, summary: summary, now: clock.now)
+    }
+
+    /// Lit le tail du transcript subagent et résume son dernier tool_use (07 · REQ-SES-11).
+    private static func lastSubagentAction(path: String) -> String? {
+        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
+        defer { try? handle.close() }
+        let size = (try? handle.seekToEnd()) ?? 0
+        // Lit au plus les derniers 64 Ko (suffisant pour la dernière ligne).
+        let window: UInt64 = 65_536
+        let start = size > window ? size - window : 0
+        try? handle.seek(toOffset: start)
+        guard let data = try? handle.readToEnd() else { return nil }
+        var lastSummary: String?
+        for lineData in data.split(separator: 0x0A) {
+            guard let entry = try? JSONSerialization.jsonObject(with: Data(lineData)) as? [String: Any],
+                  entry["type"] as? String == "assistant",
+                  let message = entry["message"] as? [String: Any],
+                  let content = message["content"] as? [[String: Any]] else { continue }
+            for block in content where block["type"] as? String == "tool_use" {
+                if let name = block["name"] as? String {
+                    lastSummary = TranscriptAccumulator.summarizeToolUse(
+                        name: name, input: block["input"] as? [String: Any] ?? [:])
+                }
+            }
+        }
+        return lastSummary
     }
 
     // MARK: - Publication (coalescée à 300 ms, 01 · §5.2)

@@ -17,11 +17,13 @@ public struct BatteryGauge: View {
     let gauge: GaugeModel
     var width: CGFloat = 34
     var height: CGFloat = 14
+    var depthLit: Bool = false
 
-    public init(gauge: GaugeModel, width: CGFloat = 34, height: CGFloat = 14) {
+    public init(gauge: GaugeModel, width: CGFloat = 34, height: CGFloat = 14, depthLit: Bool = false) {
         self.gauge = gauge
         self.width = width
         self.height = height
+        self.depthLit = depthLit
     }
 
     public var body: some View {
@@ -38,6 +40,7 @@ public struct BatteryGauge: View {
                 }
             }
             .frame(width: width, height: height)
+            .depthLitWell(depthLit, cornerRadius: 3) // puits en creux (REQ-NUI-42)
             .overlay { if gauge.isShimmering { ShimmerOverlay() } }
             // Ergot de batterie
             RoundedRectangle(cornerRadius: 1)
@@ -108,7 +111,7 @@ public struct UsageSectionView: View {
 
     private func gaugeRow(_ gauge: GaugeModel, title: String) -> some View {
         HStack(spacing: 10) {
-            BatteryGauge(gauge: gauge)
+            BatteryGauge(gauge: gauge, depthLit: settings.depthLitEnabled)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
                     Text(title).font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.8))
