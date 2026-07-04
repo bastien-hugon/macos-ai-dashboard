@@ -149,11 +149,15 @@ public final class HookServer: @unchecked Sendable {
         }
         let request = HookRequest(envelope: envelope, fd: fd, queue: queue)
         // Détecte la fermeture distante (agent tué / timeout) avant réponse.
+        // IMPORTANT : le serveur retient FORTEMENT la requête via ce moniteur — sans cela,
+        // rien ne la garde vivante entre l'appel au handler et la réponse si le handler ne
+        // capture pas `request` (le cycle request→closeMonitor→handler→request est rompu par
+        // `cancel()` sur reply ou fermeture distante, donc pas de fuite).
         let closeSource = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
-        closeSource.setEventHandler { [weak request] in
+        closeSource.setEventHandler {
             var probe = [UInt8](repeating: 0, count: 1)
             if recv(fd, &probe, 1, Int32(MSG_PEEK)) == 0 {
-                request?.fireRemoteCloseIfPending()
+                request.fireRemoteCloseIfPending()
                 closeSource.cancel()
             }
         }
