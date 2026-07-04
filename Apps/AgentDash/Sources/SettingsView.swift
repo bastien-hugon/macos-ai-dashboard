@@ -32,7 +32,14 @@ struct SettingsView: View {
         }
     }
 
-    @State private var selection: Tab = .general
+    @State private var selection: Tab = {
+        // QA : ouvre directement un onglet via env (dev).
+        if let raw = ProcessInfo.processInfo.environment["AGENTDASH_SETTINGS_TAB"],
+           let tab = Tab(rawValue: raw.prefix(1).uppercased() + raw.dropFirst()) {
+            return tab
+        }
+        return .general
+    }()
 
     var body: some View {
         NavigationSplitView {
@@ -54,6 +61,7 @@ struct SettingsView: View {
         }
         .frame(minWidth: 640, minHeight: 460)
         .onChange(of: selection) { _, tab in if tab == .doctor { onRunDoctor() } }
+        .onAppear { if selection == .doctor { onRunDoctor() } }
     }
 
     @ViewBuilder private var content: some View {

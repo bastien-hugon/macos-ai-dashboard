@@ -18,11 +18,18 @@ public actor CursorStateReader {
         snapshotHandler = handler
     }
 
+    /// Signature stable pour éviter de republier (et re-render) à chaque poll : ignore les
+    /// horodatages volatils qui changent sans changement d'état réel.
+    private var lastSignature: [String] = []
+
     public func start() {
         pollOnce()
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(4))
+                // Poll adaptatif : 3 s si une session Cursor demande une action, sinon 12 s
+                // (la DB fait ~1 Go — inutile de la relire souvent au repos).
+                let interval = await self?.pollInterval() ?? 12
+                try? await Task.sleep(for: .seconds(interval))
                 await self?.pollOnce()
             }
         }
@@ -33,11 +40,18 @@ public actor CursorStateReader {
         pollTask = nil
     }
 
+    private func pollInterval() -> Double {
+        lastPublished.contains { $0.state == .waiting || $0.state == .executing } ? 3 : 12
+    }
+
     public func pollOnce() {
         guard let reader = SQLiteReader(path: paths.cursorGlobalStorageDB.path),
               let data = reader.itemValue(key: "composer.composerHeaders") else { return }
         let sessions = Self.parseComposers(data)
-        guard sessions != lastPublished else { return }
+        // Ne republie que si la signature stable a changé (pas les timestamps).
+        let signature = sessions.map { "\($0.id.nativeID)|\($0.state.rawValue)|\($0.title)|\($0.diff.added),\($0.diff.removed)|\($0.filesTouched)|\($0.lastActivity ?? "")" }
+        guard signature != lastSignature else { return }
+        lastSignature = signature
         lastPublished = sessions
         if let handler = snapshotHandler {
             Task { @MainActor in handler(sessions) }
