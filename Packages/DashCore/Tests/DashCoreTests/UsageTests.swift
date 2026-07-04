@@ -42,6 +42,13 @@ struct UsageFormatTests {
         #expect(UsageFormat.percentText(consumed: 33, countdownFrom100: true) == "67% left")
         #expect(UsageFormat.percentText(consumed: 150, countdownFrom100: false) == "100%") // clamp
     }
+
+    @Test("dollars inline : centimes < $100, entier au-delà")
+    func dollarsInline() {
+        #expect(UsageFormat.dollars(12.4) == "$12.40")
+        #expect(UsageFormat.dollars(0) == "$0.00")
+        #expect(UsageFormat.dollars(135.2) == "$135")
+    }
 }
 
 @Suite("UsageStore (09 · REQ-USG-17/18/19/22)")

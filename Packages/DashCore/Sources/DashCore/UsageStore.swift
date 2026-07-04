@@ -45,6 +45,21 @@ public final class UsageStore {
     public private(set) var refresh: RefreshState = .idle
     public private(set) var daily: [DailyUsage] = []
 
+    /// Usage du jour par agent (ligne inline du notch) : tokens + dépense.
+    public struct TodayUsage: Equatable, Sendable {
+        public var tokens: Int
+        public var costUSD: Double?
+        public init(tokens: Int, costUSD: Double? = nil) {
+            self.tokens = tokens
+            self.costUSD = costUSD
+        }
+    }
+    public private(set) var today: [AgentKind: TodayUsage] = [:]
+
+    public func setToday(_ agent: AgentKind, _ usage: TodayUsage) {
+        today[agent] = usage
+    }
+
     /// Couleur courante par fenêtre, recalculée avec hystérésis UNIQUEMENT quand les données
     /// changent (apply/rollover). `gauge(for:)` la lit sans jamais muter — sinon SwiftUI
     /// boucle (mutation d'état observable pendant le rendu).

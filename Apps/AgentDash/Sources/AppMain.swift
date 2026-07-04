@@ -488,9 +488,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     )
                 }
             },
-            NotchSection(id: "usage", title: "Usage", isEmpty: !usage.hasAnyWindow, hidesWhenEmpty: true) {
-                UsageSectionView(store: usage, settings: settings)
-            },
+            // La section Usage a été remplacée par la ligne inline centrée en haut du panel
+            // (UsageInlineView dans le header) ; les jauges détaillées restent dans le
+            // popover de la barre de menus.
             NotchSection(id: "servers", title: "Local servers", isEmpty: false) {
                 ServersSectionView(store: servers, settings: settings) { server in
                     serversController.requestStop(server)

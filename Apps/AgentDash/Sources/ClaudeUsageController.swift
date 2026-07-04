@@ -40,6 +40,7 @@ actor ClaudeUsageController {
         loopTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.pollOnce()
+                await self?.refreshDaily() // tokens du jour frais (ligne inline du notch)
                 let interval = await self?.currentInterval ?? 180
                 try? await Task.sleep(for: .seconds(interval))
             }
@@ -85,5 +86,12 @@ actor ClaudeUsageController {
         let daily = await dailyAggregator.aggregate()
         await store.setDaily(daily)
         cache.saveDaily(daily) // persiste pour le prochain démarrage (REQ-USG-27)
+        // Usage du jour pour la ligne inline du notch.
+        let calendar = Calendar.current
+        let todayEntry = daily.first { calendar.isDateInToday($0.date) }
+        await store.setToday(.claude, UsageStore.TodayUsage(
+            tokens: todayEntry.map { $0.tokens.inputTokens + $0.tokens.outputTokens } ?? 0,
+            costUSD: todayEntry?.costUSD
+        ))
     }
 }

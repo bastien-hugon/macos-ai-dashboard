@@ -105,6 +105,65 @@ public actor CursorUsagePoller: UsageProvider {
         return try Self.decode(data, account: "cursor:\(creds.userId)", measure: measure(), now: Date())
     }
 
+    // MARK: - Usage du jour (get-aggregated-usage-events, research §3.2)
+
+    public struct TodayEvents: Equatable, Sendable {
+        public var tokens: Int       // input + output du jour
+        public var costUSD: Double   // totalCostCents / 100
+    }
+
+    /// Dépense et tokens du jour (depuis minuit locale) via l'endpoint dashboard.
+    public func fetchTodayEvents(now: Date = Date()) async throws -> TodayEvents {
+        let creds = try readCredentials()
+        let startOfDay = Calendar.current.startOfDay(for: now)
+        let body: [String: Any] = [
+            "teamId": -1,
+            "startDate": Int(startOfDay.timeIntervalSince1970 * 1000),
+            "endDate": Int(now.timeIntervalSince1970 * 1000),
+        ]
+        var request = URLRequest(url: URL(string: "https://cursor.com/api/dashboard/get-aggregated-usage-events")!)
+        request.httpMethod = "POST"
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("WorkosCursorSessionToken=\(creds.userId)%3A%3A\(creds.accessToken)",
+                         forHTTPHeaderField: "Cookie")
+        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+                         forHTTPHeaderField: "User-Agent")
+        request.setValue("https://cursor.com", forHTTPHeaderField: "Origin")
+        request.setValue("https://cursor.com/dashboard?tab=usage", forHTTPHeaderField: "Referer")
+        request.timeoutInterval = 20
+
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw UsageError.network(error.localizedDescription)
+        }
+        guard let http = response as? HTTPURLResponse else { throw UsageError.network("réponse non HTTP") }
+        switch http.statusCode {
+        case 200: break
+        case 401, 403: throw UsageError.unauthorized
+        case 429: throw UsageError.rateLimited(retryAfter: nil)
+        default: throw UsageError.network("HTTP \(http.statusCode)")
+        }
+        return try Self.decodeTodayEvents(data)
+    }
+
+    /// Décodage tolérant (nombres parfois sérialisés en strings).
+    nonisolated static func decodeTodayEvents(_ data: Data) throws -> TodayEvents {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw UsageError.decoding(field: nil)
+        }
+        func number(_ key: String) -> Double {
+            if let n = root[key] as? NSNumber { return n.doubleValue }
+            if let s = root[key] as? String, let d = Double(s) { return d }
+            return 0
+        }
+        let tokens = Int(number("totalInputTokens") + number("totalOutputTokens"))
+        let costCents = number("totalCostCents")
+        return TodayEvents(tokens: tokens, costUSD: costCents / 100)
+    }
+
     // MARK: - Décodage (pur, testable)
 
     static func decode(_ data: Data, account: String, measure: CursorUsageMeasure, now: Date) throws -> UsageSnapshot {

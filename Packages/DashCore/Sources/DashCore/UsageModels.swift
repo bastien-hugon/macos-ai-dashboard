@@ -146,4 +146,9 @@ public enum UsageFormat {
         }
         return "\(Int(consumed.rounded()))%"
     }
+
+    /// Dollars compacts pour la ligne inline : « $12.40 », « $135 » (≥ $100 sans décimales).
+    public static func dollars(_ amount: Double) -> String {
+        amount >= 100 ? String(format: "$%.0f", amount) : String(format: "$%.2f", amount)
+    }
 }

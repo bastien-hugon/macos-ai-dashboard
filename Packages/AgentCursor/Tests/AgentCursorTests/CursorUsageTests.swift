@@ -56,6 +56,23 @@ struct CursorUsageDecodeTests {
         #expect(CursorUsagePoller.parseCycleDate(NSNumber(value: 1_785_000_000_000)) != nil)
     }
 
+    @Test("decodeTodayEvents : tokens + cents du jour, tolérant aux strings")
+    func todayEvents() throws {
+        let events = try CursorUsagePoller.decodeTodayEvents(Data("""
+        { "aggregations": [{"modelIntent": "claude-4.5-sonnet", "inputTokens": 1000, "outputTokens": 200, "totalCents": 124}],
+          "totalInputTokens": 25000, "totalOutputTokens": 5100, "totalCostCents": 1240.5 }
+        """.utf8))
+        #expect(events.tokens == 30_100)
+        #expect(abs(events.costUSD - 12.405) < 0.001)
+
+        // Variante avec nombres en strings (tolérance).
+        let stringy = try CursorUsagePoller.decodeTodayEvents(Data("""
+        { "totalInputTokens": "800", "totalOutputTokens": "200", "totalCostCents": "50" }
+        """.utf8))
+        #expect(stringy.tokens == 1000)
+        #expect(stringy.costUSD == 0.5)
+    }
+
     @Test("extraction du sub JWT (userId)")
     func jwtSubject() {
         // header.payload.signature ; payload = {"sub":"google-oauth2|user_abc"}

@@ -318,25 +318,30 @@ public struct NotchRootView: View {
     }
 
     private func panelHeader(_ metrics: DensityMetrics) -> some View {
-        HStack {
-            PanelClockView(clock24h: settings.clock24h)
-                .font(metrics.metricFont)
-                .foregroundStyle(.white.opacity(settings.metricsOpacity))
-            Spacer()
-            // Bouton refresh usage (REQ-USG-31) — shimmer pendant un refresh manuel.
-            Button(action: onRefreshUsage) {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.45))
-                    .rotationEffect(.degrees(usage.refresh == .refreshing(manual: true) ? 360 : 0))
-                    .animation(usage.refresh == .refreshing(manual: true)
-                        ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default,
-                        value: usage.refresh)
+        ZStack {
+            // Usage inline, ALIGNÉ ET CENTRÉ en haut du notch :
+            // [Anthropic] %session tokens · [Cursor] $jour tokens.
+            UsageInlineView(usage: usage, settings: settings)
+            HStack {
+                PanelClockView(clock24h: settings.clock24h)
+                    .font(metrics.metricFont)
+                    .foregroundStyle(.white.opacity(settings.metricsOpacity))
+                Spacer()
+                // Bouton refresh usage (REQ-USG-31) — shimmer pendant un refresh manuel.
+                Button(action: onRefreshUsage) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .rotationEffect(.degrees(usage.refresh == .refreshing(manual: true) ? 360 : 0))
+                        .animation(usage.refresh == .refreshing(manual: true)
+                            ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default,
+                            value: usage.refresh)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, panelSideInset)
-        .padding(.vertical, 6)
+        .padding(.vertical, 8)
     }
 
     /// Plafond de scroll du panel entier : la liste de sessions étant plafonnée séparément,

@@ -43,5 +43,13 @@ actor CursorUsageController {
         } catch {
             await store.markFailure(.cursor, .network(error.localizedDescription))
         }
+        // Dépense + tokens du jour (ligne inline) — échec non bloquant.
+        do {
+            let today = try await poller.fetchTodayEvents()
+            DashLog.file("usage: Cursor today $\(String(format: "%.2f", today.costUSD)) \(today.tokens) tokens", category: "usage")
+            await store.setToday(.cursor, UsageStore.TodayUsage(tokens: today.tokens, costUSD: today.costUSD))
+        } catch {
+            DashLog.file("usage: Cursor today ÉCHEC \(error)", category: "usage")
+        }
     }
 }
