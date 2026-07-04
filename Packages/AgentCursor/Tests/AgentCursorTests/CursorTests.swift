@@ -110,6 +110,24 @@ struct CursorHooksInstallerTests {
     }
 }
 
+@Suite("CursorTimelineReader — normalisation des outils (M13, research §2.5)")
+struct CursorTimelineTests {
+    @Test("noms d'outils internes → langage clair")
+    func toolNames() {
+        #expect(CursorTimelineReader.summarize(toolName: "run_terminal_command_v2", params: nil, status: "completed") == "Ran a command")
+        #expect(CursorTimelineReader.summarize(toolName: "edit_file_v2", params: #"{"target_file":"/p/Auth.swift"}"#, status: "completed") == "Edited Auth.swift")
+        #expect(CursorTimelineReader.summarize(toolName: "read_file_v2", params: #"{"target_file":"/p/Main.swift"}"#, status: "completed") == "Read Main.swift")
+        #expect(CursorTimelineReader.summarize(toolName: "ripgrep_raw_search", params: nil, status: "completed") == "Searched files")
+        #expect(CursorTimelineReader.summarize(toolName: "task_v2", params: nil, status: "completed") == "Launched a subagent")
+        #expect(CursorTimelineReader.summarize(toolName: "mcp-memory-store", params: nil, status: "completed") == "Ran an MCP tool")
+    }
+
+    @Test("statut loading → indicateur (running)")
+    func loadingStatus() {
+        #expect(CursorTimelineReader.summarize(toolName: "edit_file_v2", params: nil, status: "loading").contains("(running)"))
+    }
+}
+
 @Suite("CursorEventRouter (08 · REQ-ACT-23)")
 struct CursorEventRouterTests {
     private func envelope(_ event: [String: Any]) -> HookEnvelope {

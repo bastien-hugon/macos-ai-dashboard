@@ -150,6 +150,8 @@ struct SessionCardView: View {
         HStack(spacing: 6) {
             if !session.tokens.isEmpty {
                 chip(DashFormat.tokenChip(session.tokens)) // « 24.6k / 66 » REQ-SES-21
+            } else if let ctx = session.contextPercent {
+                chip("ctx \(Int(ctx))%") // Cursor : contexte au lieu de tokens (REQ-SES-23)
             }
             if !session.diff.isEmpty {
                 HStack(spacing: 3) {

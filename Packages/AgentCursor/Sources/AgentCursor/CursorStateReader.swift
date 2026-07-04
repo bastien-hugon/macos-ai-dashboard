@@ -18,9 +18,11 @@ public actor CursorStateReader {
         snapshotHandler = handler
     }
 
-    /// Signature stable pour éviter de republier (et re-render) à chaque poll : ignore les
-    /// horodatages volatils qui changent sans changement d'état réel.
-    private var lastSignature: [String] = []
+    /// Signature stable par session pour éviter de republier (et re-render) à chaque poll,
+    /// et pour ne recharger la timeline (lecture de bulles) que des sessions qui changent.
+    private var lastSignatures: [String: String] = [:]
+    /// Timelines déjà chargées (réutilisées si la session n'a pas changé).
+    private var cachedDetails: [String: CursorTimelineReader.Detail] = [:]
 
     public func start() {
         pollOnce()
@@ -47,14 +49,37 @@ public actor CursorStateReader {
     public func pollOnce() {
         guard let reader = SQLiteReader(path: paths.cursorGlobalStorageDB.path),
               let data = reader.itemValue(key: "composer.composerHeaders") else { return }
-        let sessions = Self.parseComposers(data)
-        // Ne republie que si la signature stable a changé (pas les timestamps).
-        let signature = sessions.map { "\($0.id.nativeID)|\($0.state.rawValue)|\($0.title)|\($0.diff.added),\($0.diff.removed)|\($0.filesTouched)|\($0.lastActivity ?? "")" }
-        guard signature != lastSignature else { return }
-        lastSignature = signature
+        var sessions = Self.parseComposers(data)
+
+        // Enrichit (timeline + subagents) UNIQUEMENT les sessions dont la signature a changé ;
+        // les autres réutilisent la timeline en cache. Borne les lectures de bulles.
+        var changed = false
+        for i in sessions.indices {
+            let id = sessions[i].id.nativeID
+            let sig = "\(sessions[i].state.rawValue)|\(sessions[i].title)|\(sessions[i].diff.added),\(sessions[i].diff.removed)|\(sessions[i].filesTouched)|\(sessions[i].lastActivity ?? "")|\(Int(sessions[i].contextPercent ?? -1))"
+            if lastSignatures[id] != sig {
+                lastSignatures[id] = sig
+                changed = true
+                if let detail = CursorTimelineReader.read(reader: reader, composerId: id) {
+                    cachedDetails[id] = detail
+                }
+            }
+            if let detail = cachedDetails[id] {
+                sessions[i].timeline = detail.timeline
+                sessions[i].subagentCount = detail.subagentCount
+                if let activity = detail.lastActivity { sessions[i].lastActivity = activity }
+            }
+        }
+        // GC du cache des sessions disparues.
+        let present = Set(sessions.map(\.id.nativeID))
+        lastSignatures = lastSignatures.filter { present.contains($0.key) }
+        cachedDetails = cachedDetails.filter { present.contains($0.key) }
+
+        guard changed || sessions.count != lastPublished.count else { return }
         lastPublished = sessions
         if let handler = snapshotHandler {
-            Task { @MainActor in handler(sessions) }
+            let snapshot = sessions
+            Task { @MainActor in handler(snapshot) }
         }
     }
 
@@ -101,6 +126,8 @@ public actor CursorStateReader {
                 filesTouched: composer["filesChangedCount"] as? Int ?? 0
             )
             session.lastActivity = composer["subtitle"] as? String
+            // % de contexte (gratuit depuis composerHeaders) — chip « ctx X% » (REQ-SES-23).
+            session.contextPercent = (composer["contextUsagePercent"] as? NSNumber)?.doubleValue
             sessions.append(session)
         }
         return sessions

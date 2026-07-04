@@ -171,6 +171,8 @@ public struct Session: Identifiable, Hashable, Sendable {
     public var timeline: [TimelineEvent]
     public var subagentCount: Int
     public var isDismissed: Bool
+    /// % de la fenêtre de contexte utilisé (Cursor : contextUsagePercent). Chip « ctx 72% ».
+    public var contextPercent: Double?
 
     public init(
         id: SessionID,
@@ -192,7 +194,8 @@ public struct Session: Identifiable, Hashable, Sendable {
         lastReplyExcerpt: String? = nil,
         timeline: [TimelineEvent] = [],
         subagentCount: Int = 0,
-        isDismissed: Bool = false
+        isDismissed: Bool = false,
+        contextPercent: Double? = nil
     ) {
         self.id = id
         self.state = state
@@ -214,6 +217,7 @@ public struct Session: Identifiable, Hashable, Sendable {
         self.timeline = timeline
         self.subagentCount = subagentCount
         self.isDismissed = isDismissed
+        self.contextPercent = contextPercent
     }
 
     /// Nom du projet = basename du chemin (07 · REQ-SES-02).
