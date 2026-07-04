@@ -199,6 +199,7 @@ struct SettingsView: View {
             picker("Session list", bindEnum(\.sessionListSizing), ListSizing.allCases) { $0.rawValue.capitalized }
             Divider()
             Toggle("24-hour clock", isOn: bind(\.clock24h))
+            Toggle("Show on all screens", isOn: bind(\.showOnAllScreens))
             Toggle("Show session count in pill", isOn: bind(\.pillShowsSessionCount))
             Toggle("Usage mode in pill", isOn: bind(\.pillUsageMode))
             Toggle("Hide pill when idle", isOn: bind(\.pillHideWhenIdle))

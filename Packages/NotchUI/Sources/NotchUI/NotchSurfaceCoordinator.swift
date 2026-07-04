@@ -299,10 +299,16 @@ public final class NotchSurfaceCoordinator {
         surfaces.removeAll()
         screenSnapshot = currentScreenSnapshot()
 
-        guard settings.notchEnabled,
-              let screen = resolveTargetScreen(),
-              let geometry = NotchGeometry(screen: screen) else { return }
+        guard settings.notchEnabled else { return }
+        // Un écran (préféré) ou tous les écrans selon le réglage (REQ-NUI-16).
+        for screen in resolveTargetScreens() {
+            guard let geometry = NotchGeometry(screen: screen) else { continue }
+            makeSurface(on: screen, geometry: geometry, restoreExpanded: restoreExpanded && wasExpanded)
+        }
+        updateMonitors()
+    }
 
+    private func makeSurface(on screen: NSScreen, geometry: NotchGeometry, restoreExpanded: Bool) {
         // Fenêtre créée une seule fois à sa taille maximale, jamais redimensionnée (REQ-NUI-05).
         let width = PanelWidth.ultraWide.points + 2 * NotchGeometry.shadowPadding
         let height = max(300, screen.visibleFrame.height - 20)
@@ -312,17 +318,12 @@ public final class NotchSurfaceCoordinator {
             width: width,
             height: height
         )
-
         let panel = NotchPanel(contentRect: rect)
         if settings.hideFromScreenRecording { panel.sharingType = .none } // REQ-NUI-09
         let vm = NotchViewModel(geometry: geometry)
         let root = NotchRootView(
-            vm: vm,
-            coordinator: self,
-            sessions: sessions,
-            prompts: prompts,
-            usage: usage,
-            settings: settings,
+            vm: vm, coordinator: self, sessions: sessions, prompts: prompts,
+            usage: usage, settings: settings,
             onRefreshUsage: { [weak self] in self?.onRefreshUsage?() },
             sections: sections
         )
@@ -340,27 +341,23 @@ public final class NotchSurfaceCoordinator {
             context.duration = 0.15
             panel.animator().alphaValue = 1
         }
-
-        if restoreExpanded && wasExpanded {
+        if restoreExpanded {
             openSurface(vm, animated: false) // restauration sans animation (05 · §3.6)
         }
-        updateMonitors()
     }
 
-    private func resolveTargetScreen() -> NSScreen? {
+    /// Écrans porteurs de la surface (05 · REQ-NUI-14/16).
+    private func resolveTargetScreens() -> [NSScreen] {
         let screens = NSScreen.screens
-        guard !screens.isEmpty else { return nil }
-        switch settings.preferredScreen {
-        case .builtinThenMain:
-            return screens.first(where: \.isBuiltinDisplay) ?? NSScreen.main ?? screens.first
-        case .active:
-            return NSScreen.main ?? screens.first
-        case .uuid(let uuid):
-            return screens.first(where: { $0.displayUUID == uuid })
-                ?? screens.first(where: \.isBuiltinDisplay)
-                ?? NSScreen.main
-                ?? screens.first
+        guard !screens.isEmpty else { return [] }
+        if settings.showOnAllScreens { return screens }
+        let one: NSScreen? = switch settings.preferredScreen {
+        case .builtinThenMain: screens.first(where: \.isBuiltinDisplay) ?? NSScreen.main ?? screens.first
+        case .active: NSScreen.main ?? screens.first
+        case .uuid(let uuid): screens.first(where: { $0.displayUUID == uuid })
+            ?? screens.first(where: \.isBuiltinDisplay) ?? NSScreen.main ?? screens.first
         }
+        return one.map { [$0] } ?? []
     }
 
     private func fade(out panel: NotchPanel) {

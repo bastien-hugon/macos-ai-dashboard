@@ -101,6 +101,8 @@ public final class SettingsStore {
     // Notch — comportement
     public var hoverIntentDelayMs: Int { didSet { save(hoverIntentDelayMs, "hoverIntentDelayMs") } }
     public var preferredScreen: PreferredScreen { didSet { save(preferredScreen.rawValue, "preferredScreen") } }
+    /// Afficher la surface sur TOUS les écrans (REQ-NUI-16), sinon uniquement l'écran préféré.
+    public var showOnAllScreens: Bool { didSet { save(showOnAllScreens, "showOnAllScreens") } }
 
     // Pill
     public var pillWidthMode: PillWidthMode { didSet { save(pillWidthMode.rawValue, "pillWidthMode") } }
@@ -158,6 +160,7 @@ public final class SettingsStore {
         notifyTaskComplete = bool("notifyTaskComplete", true)
         hoverIntentDelayMs = int("hoverIntentDelayMs", 200)
         preferredScreen = raw("preferredScreen", PreferredScreen.builtinThenMain)
+        showOnAllScreens = bool("showOnAllScreens", false)
         pillWidthMode = raw("pillWidthMode", PillWidthMode.auto)
         pillShowsSessionCount = bool("pillShowsSessionCount", true)
         pillUsageMode = bool("pillUsageMode", false)
