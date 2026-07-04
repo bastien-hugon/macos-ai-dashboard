@@ -43,6 +43,7 @@ final class NotificationsController: NSObject, UNUserNotificationCenterDelegate 
     func post(_ content: NotificationContent) {
         guard settings.notificationsMasterEnabled else { return }
         guard typeEnabled(content.kind) else { return }
+        DashLog.file("notif: post \(content.kind.rawValue) — \(content.title)", category: "notif")
         let un = UNMutableNotificationContent()
         un.title = content.title
         if let subtitle = content.subtitle { un.subtitle = subtitle }

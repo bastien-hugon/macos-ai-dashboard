@@ -318,6 +318,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let sessions = sessions!
         let settings = settings!
         let server = HookServer(socketPath: paths.socketPath) { [weak self] request in
+            // Self-test du Doctor (REQ-SET-55) : prouve l'aller-retour IPC de bout en bout.
+            if request.envelope.eventJSON.contains("__agentdash_selftest") {
+                request.reply(Data(#"{"selftest":"ok"}"#.utf8))
+                return
+            }
             // Queue réseau → rebond sur MainActor pour muter les stores.
             // Branchement par agent d'origine (Claude Code vs Cursor).
             let isCursor = request.envelope.source == "cursor"

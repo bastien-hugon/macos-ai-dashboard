@@ -52,10 +52,10 @@ final class DoctorController {
         store.update("binary", status: binaryExists ? .ok : .failure,
                      detail: binaryExists ? "Installed at ~/.agentdash/bin" : "Missing — relaunch to repair")
 
-        // Socket joignable
-        let socketOK = testSocketReachable()
-        store.update("socket", status: socketOK ? .ok : .warning,
-                     detail: socketOK ? "Listening" : "Not reachable")
+        // Socket : self-test round-trip complet (REQ-SET-55) — prouve l'IPC de bout en bout.
+        let roundTrip = selfTestRoundTrip()
+        store.update("socket", status: roundTrip ? .ok : .warning,
+                     detail: roundTrip ? "Listening — self-test round-trip OK" : "Not reachable")
 
         // Usage / Keychain
         do {
@@ -77,8 +77,9 @@ final class DoctorController {
         }
     }
 
-    /// Le socket IPC accepte-t-il une connexion (self-test round-trip léger) ?
-    private func testSocketReachable() -> Bool {
+    /// Self-test round-trip (REQ-SET-55) : envoie un événement `__agentdash_selftest` au
+    /// socket et vérifie l'écho `{"selftest":"ok"}` — prouve que le canal IPC fonctionne.
+    private func selfTestRoundTrip() -> Bool {
         let path = paths.socketPath
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else { return false }
@@ -92,12 +93,33 @@ final class DoctorController {
                 for (i, b) in bytes.enumerated() { buf[i] = b }
             }
         }
-        let result = withUnsafePointer(to: &addr) { ptr in
+        let connected = withUnsafePointer(to: &addr) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) {
                 connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
             }
         }
-        return result == 0
+        guard connected == 0 else { return false }
+
+        // Enveloppe NDJSON avec l'événement de self-test.
+        let envelope: [String: Any] = ["v": 1, "id": "selftest", "source": "claude", "ppid": 0,
+                                       "event": #"{"hook_event_name":"__agentdash_selftest"}"#]
+        guard var payload = try? JSONSerialization.data(withJSONObject: envelope) else { return false }
+        payload.append(0x0A)
+        _ = payload.withUnsafeBytes { write(fd, $0.baseAddress, payload.count) }
+
+        // Attend l'écho (deadline 2 s).
+        var response = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        let start = Date()
+        while Date().timeIntervalSince(start) < 2 {
+            var pfd = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+            guard poll(&pfd, 1, 200) > 0 else { continue }
+            let n = read(fd, &buffer, buffer.count)
+            if n <= 0 { break }
+            response.append(contentsOf: buffer[0..<n])
+            if response.contains(0x0A) { break }
+        }
+        return String(data: response, encoding: .utf8)?.contains("\"selftest\":\"ok\"") == true
     }
 
     // MARK: - Remèdes

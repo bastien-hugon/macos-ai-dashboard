@@ -123,4 +123,25 @@ struct IPCPipelineTests {
         #expect(result.connected == false)
         #expect(result.responseBody.isEmpty)
     }
+
+    @Test("self-test round-trip (REQ-SET-55) : __agentdash_selftest est écho")
+    func selfTest() async throws {
+        let socket = tempSocket()
+        let server = HookServer(socketPath: socket) { request in
+            if request.envelope.eventJSON.contains("__agentdash_selftest") {
+                request.reply(Data(#"{"selftest":"ok"}"#.utf8))
+            } else {
+                request.reply(nil)
+            }
+        }
+        try server.start()
+        defer { server.stop() }
+        try await Task.sleep(for: .milliseconds(150))
+
+        let agent = FakeAgent(socketPath: socket)
+        let result = await Task.detached {
+            agent.send(source: "claude", event: ["hook_event_name": "__agentdash_selftest"])
+        }.value
+        #expect(String(data: result.responseBody, encoding: .utf8)?.contains("\"selftest\":\"ok\"") == true)
+    }
 }
