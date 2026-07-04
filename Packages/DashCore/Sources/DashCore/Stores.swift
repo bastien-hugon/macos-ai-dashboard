@@ -59,16 +59,57 @@ public final class SessionStore {
         }
     }
 
+    // Anti-sautillement (07 · REQ-SES-05) : un réordonnancement dû UNIQUEMENT à `lastEventAt`
+    // est appliqué au plus une fois toutes les 2 s ; un changement de rang d'état ou
+    // l'apparition/disparition d'une session réordonne immédiatement.
+    private var cachedOrder: [SessionID] = []
+    private var lastStructuralSignature = ""
+    private var lastReorderAt: Date = .distantPast
+    /// Horloge injectable pour les tests (anti-sautillement).
+    public var clockNow: () -> Date = { Date() }
+
+    /// Ordre d'affichage coalescé des sessions visibles (indépendant du groupe).
+    private var coalescedSessions: [Session] {
+        let visible = displaySessions
+        let byID = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0) })
+        // Signature structurelle : ensemble d'IDs + rangs d'état (ignore lastEventAt).
+        let signature = visible
+            .map { "\($0.id.nativeID):\($0.state.sortRank)" }
+            .sorted().joined(separator: ",")
+        let structural = signature != lastStructuralSignature
+        let now = clockNow()
+        if structural || now.timeIntervalSince(lastReorderAt) >= 2 || cachedOrder.isEmpty {
+            let sorted = visible.sorted(by: Self.intraGroupOrder)
+            cachedOrder = sorted.map(\.id)
+            lastStructuralSignature = signature
+            lastReorderAt = now
+            return sorted
+        }
+        // Réordonnancement lastEventAt-only trop récent → on garde l'ordre précédent,
+        // en réinsérant les IDs restants dans l'ordre courant et en appendant les nouveaux.
+        var result: [Session] = cachedOrder.compactMap { byID[$0] }
+        let known = Set(cachedOrder)
+        for session in visible.sorted(by: Self.intraGroupOrder) where !known.contains(session.id) {
+            result.append(session)
+        }
+        return result
+    }
+
     /// Groupes triés (07 · REQ-SES-03) : attention d'abord, puis activité récente,
-    /// puis nom ; « Other » toujours en dernier. Tri intra-groupe : REQ-SES-04.
+    /// puis nom ; « Other » toujours en dernier. Tri intra-groupe coalescé (REQ-SES-04/05).
     public var groups: [SessionGroup] {
-        let grouped = Dictionary(grouping: displaySessions) { $0.projectPath ?? "~other" }
-        let built = grouped.map { key, members in
-            SessionGroup(
-                id: key,
-                name: members.first?.projectName ?? "Other",
-                sessions: members.sorted(by: Self.intraGroupOrder)
-            )
+        let ordered = coalescedSessions
+        // Regroupe en préservant l'ordre coalescé au sein de chaque groupe.
+        var groupsByKey: [String: [Session]] = [:]
+        var keyOrder: [String] = []
+        for session in ordered {
+            let key = session.projectPath ?? "~other"
+            if groupsByKey[key] == nil { keyOrder.append(key) }
+            groupsByKey[key, default: []].append(session)
+        }
+        let built = keyOrder.map { key in
+            SessionGroup(id: key, name: groupsByKey[key]?.first?.projectName ?? "Other",
+                         sessions: groupsByKey[key] ?? [])
         }
         return built.sorted { a, b in
             if (a.id == "~other") != (b.id == "~other") { return b.id == "~other" }
