@@ -9,6 +9,7 @@ actor ClaudeUsageController {
     private let poller: ClaudeUsagePoller
     private let dailyAggregator: DailyStatsAggregator
     private let store: UsageStore
+    private let cache: StateCache
 
     private var loopTask: Task<Void, Never>?
     private var lastManualRefresh: Date = .distantPast
@@ -18,9 +19,15 @@ actor ClaudeUsageController {
         self.poller = ClaudeUsagePoller(paths: paths)
         self.dailyAggregator = DailyStatsAggregator(paths: paths)
         self.store = store
+        self.cache = StateCache(paths: paths)
     }
 
     func start() async {
+        // Affichage instantané depuis le cache (REQ-USG-27), avant la ré-agrégation.
+        if let cached = cache.loadDaily() {
+            await store.setDaily(cached)
+            DashLog.file("usage: cache journalier chargé (\(cached.count) jours)", category: "usage")
+        }
         // Comptes + stats journalières en tâche de fond.
         do {
             let accounts = try await poller.discoverAccounts()
@@ -77,5 +84,6 @@ actor ClaudeUsageController {
     private func refreshDaily() async {
         let daily = await dailyAggregator.aggregate()
         await store.setDaily(daily)
+        cache.saveDaily(daily) // persiste pour le prochain démarrage (REQ-USG-27)
     }
 }

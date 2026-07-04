@@ -57,7 +57,7 @@ public struct UsageSnapshot: Sendable {
 }
 
 /// Stats journalières (02 · §5, feature AgentPeek v0.2.6).
-public struct DailyUsage: Identifiable, Sendable, Equatable {
+public struct DailyUsage: Identifiable, Sendable, Equatable, Codable {
     public var id: String              // "YYYY-MM-DD|agent"
     public var date: Date
     public var agent: AgentKind

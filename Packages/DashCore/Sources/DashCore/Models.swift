@@ -58,7 +58,7 @@ public struct SessionID: Hashable, Codable, Sendable {
 }
 
 /// Environnement hôte d'une session (07 · REQ-SES-26).
-public enum SessionHost: Hashable, Sendable {
+public enum SessionHost: Hashable, Sendable, Codable {
     case terminal(String?) // TERM_PROGRAM si connu
     case ide(String)       // « Cursor », « VS Code »
     case desktopApp
@@ -74,7 +74,7 @@ public enum SessionHost: Hashable, Sendable {
     }
 }
 
-public enum SessionEndReason: Hashable, Sendable {
+public enum SessionEndReason: Hashable, Sendable, Codable {
     case exited, cleared, killed
 
     public var label: String {
@@ -87,7 +87,7 @@ public enum SessionEndReason: Hashable, Sendable {
 }
 
 /// Cycle de vie (02 · §3) : une session terminée reste listée jusqu'au GC (24 h).
-public enum SessionLiveness: Hashable, Sendable {
+public enum SessionLiveness: Hashable, Sendable, Codable {
     case live
     case ended(SessionEndReason)
 
@@ -96,7 +96,7 @@ public enum SessionLiveness: Hashable, Sendable {
 
 /// Comptage de tokens par session, split input/output, dédupliqué par requête
 /// (03 · REQ-CLA-24). Le total de consommation inclut les caches (piège ×100).
-public struct TokenTally: Hashable, Sendable {
+public struct TokenTally: Hashable, Sendable, Codable {
     public var inputTokens: Int
     public var outputTokens: Int
     public var cacheReadTokens: Int
@@ -114,7 +114,7 @@ public struct TokenTally: Hashable, Sendable {
     public var totalInputConsumption: Int { inputTokens + cacheReadTokens + cacheCreationTokens }
 }
 
-public struct DiffStats: Hashable, Sendable {
+public struct DiffStats: Hashable, Sendable, Codable {
     public var added: Int
     public var removed: Int
 
@@ -128,8 +128,8 @@ public struct DiffStats: Hashable, Sendable {
 
 /// Événement de timeline (07 · REQ-SES-30..36) — résumé en langage clair, jamais
 /// le contenu brut (budget RAM, 01 · §6).
-public struct TimelineEvent: Identifiable, Hashable, Sendable {
-    public enum Kind: Hashable, Sendable {
+public struct TimelineEvent: Identifiable, Hashable, Sendable, Codable {
+    public enum Kind: Hashable, Sendable, Codable {
         case prompt, toolCall, reply, marker, subagent
     }
 
@@ -147,7 +147,7 @@ public struct TimelineEvent: Identifiable, Hashable, Sendable {
 }
 
 /// Session d'agent (02 · §2) — champs M1 ; enrichie aux jalons M2+ (prompts, compte).
-public struct Session: Identifiable, Hashable, Sendable {
+public struct Session: Identifiable, Hashable, Sendable, Codable {
     public let id: SessionID
     public var state: SessionState
     public var liveness: SessionLiveness

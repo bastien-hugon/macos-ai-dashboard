@@ -54,6 +54,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sessions = SessionStore()
         prompts = PromptStore()
         usage = UsageStore()
+
+        // Résilience (M16) : affiche le dernier snapshot de sessions instantanément, avant
+        // que les sources ne republient (< 1 s). Marqué non-live tant que non reconfirmé.
+        let stateCache = StateCache(paths: paths)
+        if let cached = stateCache.loadSessions() {
+            sessions.replaceAll(cached)
+        }
         servers = ServerStore()
         fastActions = FastActionStore()
         serversController = ServersController(store: servers, paths: paths)
@@ -212,11 +219,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Auto-libération des prompts expirés (08 · REQ-ACT-07) + rollover d'usage + détection
         // « stuck » (12 · REQ-NOT-10) — tick 1 s.
+        var lastSnapshotSave = Date.distantPast
         releaseTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 prompts.releaseExpired(now: Date())
                 usage.rolloverIfNeeded(now: Date())
                 self?.checkStuckSessions(sessions: sessions, notifications: notifications)
+                // Snapshot des sessions toutes les 10 s (résilience, M16).
+                if Date().timeIntervalSince(lastSnapshotSave) >= 10 {
+                    lastSnapshotSave = Date()
+                    stateCache.saveSessions(sessions.sessions)
+                }
             }
         }
 
