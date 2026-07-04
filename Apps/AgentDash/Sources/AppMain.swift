@@ -491,9 +491,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // La section Usage a été remplacée par la ligne inline centrée en haut du panel
             // (UsageInlineView dans le header) ; les jauges détaillées restent dans le
             // popover de la barre de menus.
-            NotchSection(id: "servers", title: "Local servers", isEmpty: false) {
-                ServersSectionView(store: servers, settings: settings) { server in
-                    serversController.requestStop(server)
+            // Section repliable (gain de place) : repliée par défaut, badge = nb de serveurs.
+            NotchSection(id: "servers", title: nil, isEmpty: false) {
+                NotchDisclosureSection(
+                    title: "Local servers",
+                    badge: "\(servers.count)",
+                    isExpanded: Binding(
+                        get: { settings.serversSectionExpanded },
+                        set: { settings.serversSectionExpanded = $0 }
+                    ),
+                    settings: settings
+                ) {
+                    ServersSectionView(store: servers, settings: settings) { server in
+                        serversController.requestStop(server)
+                    }
                 }
             },
             NotchSection(

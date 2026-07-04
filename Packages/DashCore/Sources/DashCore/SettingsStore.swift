@@ -103,6 +103,8 @@ public final class SettingsStore {
     public var preferredScreen: PreferredScreen { didSet { save(preferredScreen.rawValue, "preferredScreen") } }
     /// Afficher la surface sur TOUS les écrans (REQ-NUI-16), sinon uniquement l'écran préféré.
     public var showOnAllScreens: Bool { didSet { save(showOnAllScreens, "showOnAllScreens") } }
+    /// Section « Local servers » dépliée dans le panel (repliée par défaut — gain de place).
+    public var serversSectionExpanded: Bool { didSet { save(serversSectionExpanded, "serversSectionExpanded") } }
 
     // Pill
     public var pillWidthMode: PillWidthMode { didSet { save(pillWidthMode.rawValue, "pillWidthMode") } }
@@ -161,6 +163,7 @@ public final class SettingsStore {
         hoverIntentDelayMs = int("hoverIntentDelayMs", 200)
         preferredScreen = raw("preferredScreen", PreferredScreen.builtinThenMain)
         showOnAllScreens = bool("showOnAllScreens", false)
+        serversSectionExpanded = bool("serversSectionExpanded", false)
         pillWidthMode = raw("pillWidthMode", PillWidthMode.auto)
         pillShowsSessionCount = bool("pillShowsSessionCount", true)
         pillUsageMode = bool("pillUsageMode", false)
