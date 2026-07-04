@@ -64,23 +64,37 @@ public struct MenuBarPopover: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if usage.hasAnyClaudeWindow {
-                sectionHeader("Usage", trailing: refreshButton)
-                UsageSectionView(store: usage, settings: settings)
+        // Hauteur PLAFONNÉE : le contenu scrolle au lieu de déborder au-dessus de l'écran.
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                if usage.hasAnyClaudeWindow {
+                    sectionHeader("Usage", trailing: refreshButton)
+                    UsageSectionView(store: usage, settings: settings)
+                }
+                // Serveurs repliés par défaut (même disclosure et même état que le notch).
+                NotchDisclosureSection(
+                    title: "Local servers",
+                    badge: "\(servers.count)",
+                    isExpanded: Binding(
+                        get: { settings.serversSectionExpanded },
+                        set: { settings.serversSectionExpanded = $0 }
+                    ),
+                    settings: settings
+                ) {
+                    ServersSectionView(store: servers, settings: settings, onStop: onStopServer)
+                }
+                Divider()
+                Button {
+                    onOpenSettings()
+                } label: {
+                    Label("Settings…", systemImage: "gearshape").font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
             }
-            sectionHeader("Local servers", trailing: Text("\(servers.count)").font(.system(size: 10)).foregroundStyle(.secondary))
-            ServersSectionView(store: servers, settings: settings, onStop: onStopServer)
-            Divider()
-            Button {
-                onOpenSettings()
-            } label: {
-                Label("Settings…", systemImage: "gearshape").font(.system(size: 12))
-            }
-            .buttonStyle(.plain)
+            .padding(14)
         }
-        .padding(14)
         .frame(width: 300)
+        .frame(maxHeight: 440) // jamais plus haut que l'espace sous la barre de menus
         .preferredColorScheme(.dark)
     }
 

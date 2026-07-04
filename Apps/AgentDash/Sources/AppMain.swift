@@ -281,6 +281,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.coordinator?.open(reason: .click)
             }
         }
+        // QA : ouvre le popover de la barre de menus sans clic.
+        if ProcessInfo.processInfo.environment["AGENTDASH_OPEN_POPOVER"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                self?.menuBar?.showPopoverForTesting()
+            }
+        }
     }
 
     private func showOnboarding() {

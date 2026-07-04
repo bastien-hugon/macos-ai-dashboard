@@ -91,8 +91,18 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
             onStopServer: onStopServer,
             onOpenSettings: { [weak self] in self?.popover.performClose(nil); self?.onOpenSettings() }
         )
-        popover.contentViewController = NSHostingController(rootView: content)
+        let hosting = NSHostingController(rootView: content)
+        // Taille explicite bornée : sans elle, un contenu plus haut que l'écran fait
+        // déborder le popover au-dessus de la barre de menus.
+        let fitting = hosting.view.fittingSize
+        hosting.preferredContentSize = NSSize(width: 300, height: min(max(fitting.height, 120), 440))
+        popover.contentViewController = hosting
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         // Ne pas activer l'app (REQ-MBR-13) : le popover transient reste sans vol de focus.
+    }
+
+    /// QA : ouvre le popover sans clic (env AGENTDASH_OPEN_POPOVER=1).
+    func showPopoverForTesting() {
+        if let button = statusItem?.button { togglePopover(button) }
     }
 }
