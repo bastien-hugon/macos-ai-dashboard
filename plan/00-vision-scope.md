@@ -175,7 +175,7 @@ Priorités : **P0** = indispensable au MVP ; **P1** = parité complète v0.2.11 
 
 ### Principes produit (local, privé, innocuité)
 
-- **REQ-VIS-12 (P0)** — Le trafic réseau sortant est limité à 4 destinations (`api.anthropic.com`, `cursor.com`, appcast Sparkle, Worker de licence), chacune désactivable ou absente selon les réglages. Test : 24 h derrière un proxy (Proxyman/Little Snitch) → aucune autre destination ; toggles off → plus aucune requête vers la destination correspondante. **Divergence assumée vs features §12** (qui ne liste que 3 destinations) : la source d'usage Claude (features §5.2, « données du `/usage` de Claude Code ») est l'endpoint `api.anthropic.com/api/oauth/usage` — le même appel que le `/usage` du CLI [HYPOTHÈSE — AgentPeek utilise vraisemblablement la même source]. Destination désactivable via `claudeUsageEnabled` (zéro requête si off). Écart consigné comme volontaire dans la matrice de traçabilité (REQ-VIS-26).
+- **REQ-VIS-12 (P0)** — Le trafic réseau sortant est limité à **2 destinations** (`api.anthropic.com` pour l'usage Claude, `cursor.com` pour l'usage Cursor), chacune désactivable (opt-out) selon les réglages. Test : 24 h derrière un proxy (Proxyman/Little Snitch) → aucune autre destination ; toggles off → plus aucune requête vers la destination correspondante. **Divergence assumée vs features §12** (qui liste 3 destinations, mises à jour comprises — le modèle one-shot supprime toute destination de mise à jour ou de licence) : la source d'usage Claude (features §5.2, « données du `/usage` de Claude Code ») est l'endpoint `api.anthropic.com/api/oauth/usage` — le même appel que le `/usage` du CLI [HYPOTHÈSE — AgentPeek utilise vraisemblablement la même source]. Destination désactivable via `claudeUsageEnabled` (zéro requête si off). Écart consigné comme volontaire dans la matrice de traçabilité (REQ-VIS-26).
 - **REQ-VIS-13 (P0)** — Aucun contenu utilisateur (prompt, réponse, diff, commande) ne quitte la machine ni n'apparaît dans les logs — identifiants, tailles et codes d'erreur uniquement. Test : inspection de `~/Library/Logs/AgentDash/` et des payloads réseau capturés après une session d'usage intensif.
 - **REQ-VIS-14 (P0)** — Zéro configuration par session : après l'installation initiale des hooks, une nouvelle session (terminal, IDE ou desktop) apparaît dans la liste sans aucune action utilisateur — y compris les sessions Claude déjà ouvertes (rechargement à chaud des settings, VÉRIFIÉ doc). Test : hooks installés → ouvrir un nouveau terminal, lancer `claude`, soumettre un prompt → la session apparaît sans avoir touché AgentDash.
 - **REQ-VIS-15 (P0)** — Fail-open absolu : AgentDash quittée, crashée ou saturée, chaque agent continue de fonctionner à l'identique (dialogues natifs), avec un surcoût par hook < 50 ms (spawn 2,7 ms + connexion en échec, mesurés — VÉRIFIÉ). Test : quitter AgentDash, déclencher une permission dans Claude Code → le prompt natif du terminal s'affiche normalement.
@@ -199,8 +199,8 @@ Priorités : **P0** = indispensable au MVP ; **P1** = parité complète v0.2.11 
 
 - **REQ-VIS-25 (P0)** — Parité MVP : les blocs 1 à 8 du tableau §1.4.1 sont fonctionnels pour Claude Code, et les blocs 1 à 5 pour Cursor (le bloc 5 limité aux permissions via hooks bloquants — pas de ⌥A ni de réponses inline), alignés sur le contenu v0.1.0 d'AgentPeek étendu à Cursor. Test : checklist de démonstration scriptée (cf. §6).
 - **REQ-VIS-26 (P1)** — Parité complète : chaque ligne des sections 2 à 12 de `AGENTPEEK_FEATURES.md` (hors mentions Codex) est couverte par une exigence d'un fichier de plan et implémentée. Test : matrice de traçabilité features → REQ maintenue dans le repo, sans trou.
-- **REQ-VIS-27 (P1)** — Distribution : DMG signé Developer ID et notarisé, installable par glisser-déposer ; mises à jour Sparkle avec checks horaires. Test : téléchargement sur machine vierge → Gatekeeper accepte sans clic droit ; une mise à jour de test est proposée puis installée.
-- **REQ-VIS-28 (P1)** — Modèle économique : essai gratuit 48 h puis licence one-time (1 licence = 1 Mac), déblocage immédiat à la saisie de la clé, écran d'achat immédiat à l'expiration sans redémarrage, manipulation d'horloge inefficace. Test : scénarios LicensingKit (trial, activation, rollback d'horloge).
+- **REQ-VIS-27 (P1)** — Distribution one-shot : DMG installable par glisser-déposer, signé Developer ID et notarisé si un compte Developer ID est disponible ; **aucun mécanisme d'auto-update** (ni Sparkle, ni appcast, ni canal bêta). Mise à jour = remplacement manuel de `AgentDash.app` dans `/Applications` (ou désinstallation → réinstallation) : au relancement, `~/.agentdash/bin` est resynchronisé, les réglages et les sauvegardes `.bak` survivent. Test : installation sur machine vierge → Gatekeeper accepte sans clic droit ; remplacement de l'app par un build plus récent → réglages intacts, binaire hook resynchronisé au premier lancement.
+- **REQ-VIS-28** — supprimé (décision one-shot du 3 juillet 2026).
 
 ### Méthode (exigence de processus)
 
@@ -327,7 +327,7 @@ Au niveau vision, seuls le ton et le vocabulaire de l'interface sont normés (ch
 - **Langue** : anglais uniquement (REQ-VIS-05). Ton : sobre, technique, sans emphase (« Ready », « Waiting for you », « resets in 2h 14m »).
 - **Noms d'agents affichés** : `Claude Code` et `Cursor` (jamais « Anthropic », « Claude » seul ni « Cursor IDE »).
 - **États affichés** (couleur + mouvement, jamais couleur seule — features §3.2) : `Executing`, `Thinking`, `Waiting`, `Idle`.
-- **Textes canoniques transverses** (repris tels quels par les autres fichiers de plan) : boutons `Allow` / `Deny` / `Always Allow` / `Deny with feedback` / `Approve` / `Reject` / `Show more` / `Show less` / `Copy Session as Markdown` / `Kill` ; statut de hooks `Ready` ; onboarding `Start free trial` / `Enter license key` ; promesse d'achat `No subscription, ever.` ; ⌥T `Open Terminal`.
+- **Textes canoniques transverses** (repris tels quels par les autres fichiers de plan) : boutons `Allow` / `Deny` / `Always Allow` / `Deny with feedback` / `Approve` / `Reject` / `Show more` / `Show less` / `Copy Session as Markdown` / `Kill` ; statut de hooks `Ready` ; ligne de mise à jour manuelle `To update: replace AgentDash.app with a newer build.` ; ⌥T `Open Terminal`.
 - **Sobriété** : l'app ne vole jamais le focus (panel non-activant), n'émet aucun son hors notifications opt-in, ne s'affiche pas dans le Dock. Le notch est « présent sans être là » : pill noire fondue dans l'encoche, animations discrètes (420 ms d'expansion, actée en 01-architecture §6).
 
 ---
@@ -336,18 +336,18 @@ Au niveau vision, seuls le ton et le vocabulaire de l'interface sont normés (ch
 
 Cas limites au niveau produit/périmètre (les cas techniques par flux vivent dans les fichiers spécialisés) :
 
-1. **Mac Intel** : le binaire arm64 pur ne se lance pas ; la page de téléchargement et le README d'installation indiquent « Apple Silicon only » — aucun fallback Rosetta (non-objectif). Message d'erreur système standard assumé.
+1. **Mac Intel** : le binaire arm64 pur ne se lance pas ; le README d'installation indique « Apple Silicon only » — aucun fallback Rosetta (non-objectif). Message d'erreur système standard assumé.
 2. **macOS 13 ou antérieur** : Gatekeeper/launchd refuse (LSMinimumSystemVersion) ; documentation d'installation explicite.
 3. **Aucun agent installé** (`~/.claude` et `~/.cursor` absents) : l'app se lance, l'onboarding affiche les cartes « Non détecté » avec liens d'installation (01-architecture §7.2) ; serveurs, Fast Actions et Settings restent fonctionnels ; aucune erreur bloquante.
 4. **Codex installé sur la machine** (`~/.codex` présent) : ignoré totalement — pas de session fantôme, pas de Quick Route, aucun accès disque à ce dossier (REQ-VIS-08).
 5. **AgentPeek installé et actif en parallèle** : les deux outils écrivent des hooks dans les mêmes fichiers — la fusion non destructive préserve les entrées AgentPeek ; les deux reçoivent les événements (Claude exécute tous les hooks correspondants — VÉRIFIÉ doc « tous doivent finir »). Risque résiduel : deux répondeurs pour une même permission ; comportement précisé dans le plan prompts [HYPOTHÈSE — à valider : quelle réponse gagne côté agent quand deux hooks bloquants répondent].
 6. **Écran sans notch** (Mac mini/Studio + écran externe, MacBook pré-2021) : la surface notch se positionne au ras du bord supérieur (notch simulé, features §2.2) ; aucune fonctionnalité perdue.
-7. **Machine hors ligne durable** : tout le local fonctionne ; jauges d'usage en rétention datée puis `--` pour les comptes jamais lus ; licence en grâce 14 j (02-data-model §6).
+7. **Machine hors ligne durable** : tout le local fonctionne ; jauges d'usage en rétention datée puis `--` pour les comptes jamais lus.
 8. **Locale non anglaise / horloge 12 h** : UI reste en anglais ; format d'heure suit le réglage 12/24 h de l'app (défaut 24 h sur machine FR — 02-data-model §6.1).
 9. **Utilisateur sans droits d'écriture sur `~/.claude/settings.json`** (permissions cassées) : l'installation de hooks échoue proprement → statut `damaged(reason)` + correctif guidé dans Doctor ; jamais de crash ni d'écriture partielle.
 10. **Montée de version des agents** (format de hooks/transcripts modifié) : parseurs tolérants (types inconnus ignorés — 01-architecture §9), features concernées désactivées individuellement avec version plancher affichée dans Doctor ; jamais de dégradation globale.
 11. **Retrait d'AgentDash** (suppression de l'app sans désinstallation) : les hooks orphelins pointent vers `~/.agentdash/bin/agentdash-hook` toujours présent → fail-open garanti même orphelin (exit 0 silencieux) ; les agents ne sont jamais cassés. La documentation décrit la désinstallation propre (toggle off avant suppression).
-12. **Plusieurs utilisateurs macOS sur le même Mac** : chemins tous relatifs à `$HOME` → instances indépendantes ; le socket 0600 empêche la lecture croisée ; 1 licence = 1 Mac (pas 1 utilisateur) — assumé, identique à AgentPeek.
+12. **Plusieurs utilisateurs macOS sur le même Mac** : chemins tous relatifs à `$HOME` → instances indépendantes ; le socket 0600 empêche la lecture croisée.
 
 ---
 
@@ -355,7 +355,7 @@ Cas limites au niveau produit/périmètre (les cas techniques par flux vivent da
 
 Scénarios vérifiables manuellement, au niveau vision (les scénarios fins par feature vivent dans leurs fichiers) :
 
-1. **Étanchéité réseau** — Given un Mac avec proxy d'inspection installé et AgentDash configurée (usage Claude/Cursor activés), When on utilise l'app 24 h avec sessions actives, Then le journal du proxy ne contient que `api.anthropic.com`, `cursor.com`, l'hôte de l'appcast et l'hôte du Worker de licence ; When on désactive les quatre toggles correspondants, Then plus aucune requête sortante n'apparaît.
+1. **Étanchéité réseau** — Given un Mac avec proxy d'inspection installé et AgentDash configurée (usage Claude/Cursor activés), When on utilise l'app 24 h avec sessions actives, Then le journal du proxy ne contient que `api.anthropic.com` et `cursor.com` ; When on désactive les deux toggles correspondants, Then plus aucune requête sortante n'apparaît.
 2. **Fail-open** — Given une session Claude Code active avec hooks installés, When on quitte AgentDash puis on déclenche une commande nécessitant une permission, Then le prompt natif du terminal apparaît sans délai perceptible et la session se poursuit normalement.
 3. **Zéro config par session** — Given hooks installés hier, When on ouvre trois nouveaux terminaux et une fenêtre Cursor et on lance un prompt dans chacun, Then les quatre sessions apparaissent dans le notch sans qu'aucune action AgentDash n'ait été faite, triées par projet, sans doublon.
 4. **Sans souris** — Given une permission visible dans le notch et le focus clavier dans une autre app, When on tape ⌘A, Then l'agent reçoit Allow et poursuit ; l'app au premier plan n'a pas reçu le raccourci ; When aucun prompt n'est visible, Then ⌘A garde son sens natif dans l'app au premier plan.
@@ -386,7 +386,7 @@ Scénarios vérifiables manuellement, au niveau vision (les scénarios fins par 
 | R5 | **Concurrence avec AgentPeek lui-même** (double répondeur de permissions si les deux sont installés) | Faible | Faible | Cas limite n°5 documenté ; détection de hooks AgentPeek dans Doctor avec avertissement |
 | R6 | **Différenciation juridique/commerciale** : clone fonctionnel d'un produit payant existant (nom, textes, positionnement) | Moyenne | Moyen | Nom, marque et visuels propres (T1) ; aucun asset ni texte copié tel quel hors conventions d'UI génériques ; décision de distribution (privée/publique) avant toute publication |
 | R7 | **Liquid Glass / macOS 26** : écart visuel entre fallback (macOS 14–25) et rendu 26 | Faible | Faible | `agentGlass()` avec les deux branches testées ; captures comparatives par release |
-| R8 | **Modèle économique optionnel** : si la distribution retenue est privée/gratuite, LicensingKit devient du sur-coût | Moyenne | Faible | REQ-VIS-27/28 en P1 (pas MVP) ; LicensingKit isolé — retirable sans toucher au reste |
+| R8 | — supprimé (décision one-shot du 3 juillet 2026 : ni licence, ni LicensingKit) | — | — | — |
 
 ---
 
@@ -401,7 +401,7 @@ Scénarios vérifiables manuellement, au niveau vision (les scénarios fins par 
 | T5 | Construire le banc d'étanchéité réseau (profil proxy + checklist 4 destinations + toggles) | S | Procédure + rapport (REQ-VIS-12/13) |
 | T6 | Rédiger la checklist de démonstration MVP (scénarios §6 n°2, 3, 4, 6) rejouable à chaque release | S | Checklist versionnée (REQ-VIS-25) |
 | T7 | Documenter la politique de coexistence et de désinstallation (hooks tiers, AgentPeek, retrait de l'app) + vérification Doctor associée | S | Section docs + check Doctor (REQ-VIS-16/17, cas limites 5 et 11) |
-| T8 | Trancher la stratégie de distribution (publique payante / privée gratuite) et le Go/NoGo LicensingKit en P1 ; documenter dans le plan distribution | S | Décision consignée (R6, R8) |
+| T8 | Documenter le modèle de distribution one-shot dans `plan/14-onboarding-distribution.md` (installation, remplacement manuel, désinstallation) et la décision de publication (privée/publique) au regard de R6 | S | Décision consignée (R6) |
 | T9 | Mettre en place la revue de vocabulaire (glossaire §1.6 intégré au template de PR) | S | Template de PR (REQ-VIS-30) |
 
-Ordre conseillé : T1 → T3 → T2 (la matrice référence les REQ des autres fichiers au fur et à mesure de leur rédaction) ; T4/T5 avant la première release interne ; T8 avant tout travail LicensingKit.
+Ordre conseillé : T1 → T3 → T2 (la matrice référence les REQ des autres fichiers au fur et à mesure de leur rédaction) ; T4/T5 avant la première release interne ; T8 avant toute publication.

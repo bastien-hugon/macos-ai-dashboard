@@ -1,3 +1,5 @@
+> ⚠️ ARCHIVÉ — hors scope depuis la décision one-shot du 3 juillet 2026 (pas de licence, pas d'auto-update, pas de site). Conservé pour référence. Les sections onboarding et signature/notarisation restent partiellement pertinentes pour plan/14-onboarding-distribution.md.
+
 # Recherche — Distribution, mises à jour et licensing d'AgentDash (nom provisoire)
 
 > Recherche menée le 3 juillet 2026. Sources : documentation officielle Sparkle, Apple Developer, Lemon Squeezy, Paddle, GitHub (actions/runner-images), articles techniques récents (2024-2026).

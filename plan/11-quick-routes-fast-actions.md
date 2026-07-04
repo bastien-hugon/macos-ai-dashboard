@@ -58,7 +58,7 @@ Modules concernés : **NotchUI** (sections UI, conformément à `01-architecture
 | **REQ-QRF-27** | P1 | Bouton « Copy output » sur le bloc de résultat (presse-papiers, sortie complète retenue — dans la limite du tail conservé) ; menu contextuel de row : « Copy command ». |
 | **REQ-QRF-28** | P1 | État vide de la section notch : texte « No fast actions yet » + bouton « Open Settings » ouvrant Settings → General. La section reste visible (contrairement aux Quick Routes) pour rendre la feature découvrable. [HYPOTHÈSE produit] |
 | **REQ-QRF-29** | P2 | Validation à l'édition : « Save » désactivé si `title` ou `command` est vide/blanc ; plafond doux de 50 actions (le bouton `+` se désactive avec tooltip). |
-| **REQ-QRF-30** | P2 | Quand `LicenseState == .trialExpired` (notch verrouillé, pill grisée — `02-data-model.md` §6), les Fast Actions ne sont pas exécutables, comme le reste du panel. |
+| **REQ-QRF-30** | — | Supprimé (décision one-shot du 3 juillet 2026). |
 
 ---
 
@@ -320,7 +320,7 @@ Tous les textes d'interface en anglais, comme AgentPeek. Dimensions données pou
 20. **Édition d'une action en cours d'exécution** : autorisée ; le run en cours conserve l'ancienne commande, le prochain run utilise la nouvelle.
 21. **Armement puis repli du panel** : désarmement systématique (REQ-QRF-17) — jamais d'exécution différée invisible.
 22. **> 3 runs simultanés** : boutons Run désactivés + tooltip (REQ-QRF-22) — protège les budgets CPU/RAM.
-23. **Trial expiré** : panel verrouillé ⇒ aucune exécution possible (REQ-QRF-30).
+23. *Supprimé (décision one-shot du 3 juillet 2026)* — plus de trial ni de panel verrouillé ; REQ-QRF-30 supprimé.
 24. **`~/.zprofile` lent** (nvm, brew shellenv…) : latence de spawn possible de plusieurs centaines de ms — le spinner apparaît dès le clic, aucune bascule de thread UI.
 25. **Deux actions au titre identique** : autorisé (l'`UUID` désambiguïse) ; aucune contrainte d'unicité.
 26. **Échec d'écriture UserDefaults** : improbable ; le débounce réessaie à la mutation suivante ; aucune perte au-delà de la dernière édition.
@@ -356,7 +356,7 @@ Tous les textes d'interface en anglais, comme AgentPeek. Dimensions données pou
 | Document | Ce qu'on en consomme |
 |---|---|
 | `plan/01-architecture.md` | modules (NotchUI/DashCore/SettingsKit), règles de threading (aucun I/O sur MainActor, coalescence 250 ms), budgets RAM/CPU, règles kill (SIGTERM→SIGKILL, pas de `killpg`), logging sans contenu utilisateur |
-| `plan/02-data-model.md` | structs `QuickRoute` et `FastAction` (§5), persistance UserDefaults (§8), `Density`/`metricsOpacity` (AppSettings), `LicenseState.trialExpired` |
+| `plan/02-data-model.md` | structs `QuickRoute` et `FastAction` (§5), persistance UserDefaults (§8), `Density`/`metricsOpacity` (AppSettings) |
 | Document notch UI (numérotation à confirmer) | conteneur du panel, ordre des sections, `agentGlass()`, depth-lit, repli/expansion, gestion densité |
 | Document hooks/installation (numérotation à confirmer) | signal `hooksDidChange` (création de `~/.cursor/hooks.json`) pour invalider le cache d'existence |
 | Document Settings (numérotation à confirmer) | structure de l'onglet General qui héberge le groupe « Fast Actions » |

@@ -19,7 +19,7 @@ AgentDash émet des notifications macOS natives (`UNUserNotificationCenter`) pou
 | §2.2 / §14.3 (par renvoi) | articulation avec le point orange menu bar et l'auto-expand du notch |
 | §13 changelog | v0.1.7 (introduction des 4 types), v0.1.8 (réglages étendus), v0.1.26–0.1.28 (test notification), v0.2.9 (notifications de fin de tâche) |
 
-**Hors périmètre de ce fichier** : les « prompts de mise à jour avec l'icône de l'app » et la fenêtre « What's New » (§9 features, dernier point) relèvent de Sparkle et du fichier distribution/updates ; le contenu du prompt inline lui-même (boutons, hotkeys, `PromptStore`) relève de `plan/08-actions-inline.md` et des fichiers d'intégration agents ; le point orange relève de `plan/06-menubar.md` (REQ-MBR-04).
+**Hors périmètre de ce fichier** : les prompts de mise à jour et la fenêtre « What's New » (§9 features, dernier point) sont sans objet (modèle one-shot, décision du 3 juillet 2026) ; le contenu du prompt inline lui-même (boutons, hotkeys, `PromptStore`) relève de `plan/08-actions-inline.md` et des fichiers d'intégration agents ; le point orange relève de `plan/06-menubar.md` (REQ-MBR-04).
 
 ---
 
@@ -87,7 +87,7 @@ AgentDash émet des notifications macOS natives (`UNUserNotificationCenter`) pou
 ### 2.8 Performance et divers
 
 - **REQ-NOT-35 (P0)** — Latence : le post est déclenché dans le **même tick MainActor** que la mutation de store qui le cause (chaîne hook → UI < 150 ms, budget A9) ; l'appel `add(_:)` est asynchrone et n'est jamais attendu de façon bloquante par l'UI.
-- **REQ-NOT-36 (P0)** — Aucune notification pendant l'onboarding tant que l'étape notifications n'est pas atteinte, et aucune quand `LicenseState == .trialExpired` avec notch verrouillé **sauf** `budgetAlert` **[HYPOTHÈSE produit — comportement fin de trial à trancher avec LicensingKit]**.
+- **REQ-NOT-36 (P0)** — Aucune notification pendant l'onboarding tant que l'étape notifications n'est pas atteinte.
 - **REQ-NOT-37 (P1)** — Tous les posts passent par une unique façade (`NotificationCoordinator.post`) — vérifiable par revue : aucun autre appel à `UNUserNotificationCenter.add` dans le code (règle lint).
 
 ---
@@ -292,7 +292,7 @@ Un unique timer mutualisé 1 s (01-architecture §5.2) évalue les sessions `exe
 12. **Échec de `add(_:)`** (erreur système rare) : log `.error` catégorie `ui`, aucune retry (la prochaine occurrence re-postera) ; jamais d'alerte UI pour un échec de notification.
 13. **Suppression manuelle par l'utilisateur dans le Centre de notifications** : indétectable et sans conséquence — l'état de vérité reste `PromptStore`/`SessionStore`.
 14. **`stuckThresholdSeconds` modifié à chaud** : appliqué au prochain tick du timer ; les épisodes en cours ne re-notifient pas (dédup par épisode).
-15. **Trial expiré** : comportement REQ-NOT-36 ; à trancher définitivement avec LicensingKit (le notch verrouillé ne doit pas générer des notifications de permission inactionnables).
+15. *Supprimé (décision one-shot du 3 juillet 2026)* — plus de trial ni de notch verrouillé ; REQ-NOT-36 ne couvre plus que l'onboarding.
 16. **Plusieurs sessions waiting simultanées** : une notification par session (identifiants distincts), empilées par `threadIdentifier` ; le point orange est global, le notch liste tous les prompts.
 
 ---
@@ -327,7 +327,7 @@ Un unique timer mutualisé 1 s (01-architecture §5.2) évalue les sessions `exe
 | `05-notch-ui.md` | `NotchOpenReason` (règle de suppression REQ-NOT-32), `open(reason: .attention)` (REQ-NOT-18), REQ-NUI-20 |
 | `08-actions-inline.md` | `PromptStore.resolve(promptID:decision:source:)`, sérialisation « une seule décision par prompt » (REQ-ACT-05), routage des actions de notification (REQ-ACT-39), contenu du prompt inline |
 | `06-menubar.md` | `hasPendingAttention` (point orange, hiérarchie §2.7), action `openNotch` |
-| Fichiers usage / settings / doctor / distribution | jauges `UsageWindow` (+ `resetsAt`), onglet Settings hôte, check Doctor, prompts de mise à jour Sparkle (exclus d'ici) |
+| Fichiers usage / settings / doctor / distribution | jauges `UsageWindow` (+ `resetsAt`), onglet Settings hôte, check Doctor |
 
 **Éléments que ce fichier IMPOSE aux autres** : ① `NotificationPlanner` et `Withdrawal` dans `DashCore` ; ② rappel des transitions de `isStale` et de la résolution de prompt vers le planner (SessionStore/PromptStore) ; ③ exposition de `NotchOpenReason` courant par `NotchUI` ; ④ si REQ-NOT-13 est retenue : `budgetThresholdMonthly` dans `AppSettings` (`02-data-model.md` §6.1) ; ⑤ étape « Stay in the loop » dans l'onboarding (SettingsKit) ; ⑥ déclenchement d'un **refresh d'usage immédiat** sur `StopFailure(rate_limit)` (REQ-NOT-12) — à intégrer côté `03-integration-claude-code.md` (extension de REQ-CLA-34) et fichier usage.
 

@@ -1,7 +1,7 @@
 # 13. Fenêtre Settings (SettingsKit) et onglet Doctor
 
-> Spécification du module **SettingsKit** (package SPM, dépend de `DashCore`, `DoctorKit` et `LicensingKit` — cf. `plan/01-architecture.md` §3.1) et du module **DoctorKit** pour sa partie diagnostic. Rédigée le 3 juillet 2026, conforme à `plan/01-architecture.md` (décisions A2, A4, A5, A9, A10), `plan/02-data-model.md` (§6.1 `AppSettings` — la source de vérité de tous les défauts cités ici) et aux fichiers `03-integration-claude-code.md`, `05-notch-ui.md`, `06-menubar.md`, `09-token-usage.md`, `10-local-servers.md`.
-> Convention : **[VÉRIFIÉ]** = adossé à `AGENTPEEK_FEATURES.md`, à la doc officielle Apple/Sparkle ou à une inspection locale ; **[HYPOTHÈSE — à valider]** = déduction (AgentPeek n'est pas installé sur cette machine, son rendu exact n'est pas inspectable) ; **[TRANCHÉ produit]** = valeur choisie par nous quand AgentPeek ne documente pas la sienne.
+> Spécification du module **SettingsKit** (package SPM, dépend de `DashCore` et `DoctorKit` — cf. `plan/01-architecture.md` §3.1) et du module **DoctorKit** pour sa partie diagnostic. Rédigée le 3 juillet 2026, conforme à `plan/01-architecture.md` (décisions A2, A4, A5, A9, A10), `plan/02-data-model.md` (§6.1 `AppSettings` — la source de vérité de tous les défauts cités ici) et aux fichiers `03-integration-claude-code.md`, `05-notch-ui.md`, `06-menubar.md`, `09-token-usage.md`, `10-local-servers.md`.
+> Convention : **[VÉRIFIÉ]** = adossé à `AGENTPEEK_FEATURES.md`, à la doc officielle Apple ou à une inspection locale ; **[HYPOTHÈSE — à valider]** = déduction (AgentPeek n'est pas installé sur cette machine, son rendu exact n'est pas inspectable) ; **[TRANCHÉ produit]** = valeur choisie par nous quand AgentPeek ne documente pas la sienne.
 
 ---
 
@@ -18,7 +18,7 @@ Sections d'`AGENTPEEK_FEATURES.md` couvertes :
 - **§4.1** — réglage « prompt handling location ».
 - **§13** — v0.1.12 (bouton power Quit), v0.2.6–0.2.7 (onglet Doctor), v0.2.9 (sidebar redimensionnable, onglets Usage et Shortcuts).
 
-Hors périmètre de ce fichier : le contenu des surfaces pilotées par ces réglages (notch → `05`, menu bar → `06`, jauges → `09`), l'onboarding et l'écran d'achat (fichier distribution/licensing), la fenêtre What's New (idem), la logique d'installation des hooks elle-même (`03` pour Claude, fichier Cursor pour `~/.cursor/hooks.json`) — Settings ne fait qu'**invoquer** les `HooksInstaller` et **afficher** leurs statuts.
+Hors périmètre de ce fichier : le contenu des surfaces pilotées par ces réglages (notch → `05`, menu bar → `06`, jauges → `09`), l'onboarding (`14-onboarding-distribution.md`), la logique d'installation des hooks elle-même (`03` pour Claude, fichier Cursor pour `~/.cursor/hooks.json`) — Settings ne fait qu'**invoquer** les `HooksInstaller` et **afficher** leurs statuts.
 
 ---
 
@@ -69,8 +69,8 @@ Tous les contrôles de cet onglet mutent `AppSettings` et sont reflétés par le
 - **REQ-SET-28 (P2)** — **Title weight** : picker `Regular / Medium / Semibold / Bold` (défaut **Semibold**, clé `titleWeight`).
 - **REQ-SET-29 (P1)** — **Clock** : picker `12-hour / 24-hour` (défaut **24-hour**, clé `clock24h`) ; s'applique à tous les horodatages affichés (heures de refill, timeline, uptime).
 - **REQ-SET-30 (P1)** — Section **Pill** — quatre toggles : **Show session count** (défaut on, `pillShowsSessionCount`), **Usage mode** (défaut off, `pillUsageMode` ; sous-texte « Show live usage gauges in the collapsed pill »), **Hide when idle** (défaut off, `pillHideWhenIdle`), **Expanded only** (défaut off, `pillExpandedOnly`) **[VÉRIFIÉ features §10 « count / usage / hide when idle / expanded only »]**.
-- **REQ-SET-31 (P1)** — **Glass opacity** : slider continu 0…1 (défaut **0,55**, clé `glassOpacity`), extrémité droite étiquetée **Opaque** ; à 1,0 le blur est réellement désactivé (`NSVisualEffectView` retirée — pas seulement recouverte) **[VÉRIFIÉ v0.2.8 « slider d'opacité + Opaque »]**.
-- **REQ-SET-32 (P1)** — **Frosted rim** (toggle, défaut on, `frostedRim`) et **Depth-lit interface** (toggle, défaut on, `depthLitEnabled` ; sous-texte « Raised cards, recessed wells ») **[VÉRIFIÉ features §10]**.
+- **REQ-SET-31 (P1)** — **Glass opacity** : slider continu 0…1 (défaut **1,0** — noir profond opaque, calibrage utilisateur du 3 juillet 2026 : le panel doit se fondre dans la découpe ; clé `glassOpacity`), extrémité droite étiquetée **Opaque** ; à 1,0 le blur est réellement désactivé (`NSVisualEffectView` retirée — pas seulement recouverte) **[VÉRIFIÉ v0.2.8 « slider d'opacité + Opaque »]**.
+- **REQ-SET-32 (P1)** — **Frosted rim** (toggle, défaut **off** — calibrage utilisateur du 3 juillet 2026 : pas de liseré dégradé sur la surface notch par défaut, `frostedRim`) et **Depth-lit interface** (toggle, défaut on, `depthLitEnabled` ; sous-texte « Raised cards, recessed wells ») **[VÉRIFIÉ features §10]**.
 - **REQ-SET-33 (P1)** — **Metrics opacity** : slider 0,3…1 (défaut **0,85**, clé `metricsOpacity`) ; sous-texte « Legibility of numbers in the notch » **[VÉRIFIÉ v0.2.11 ; borne basse 0,3 = TRANCHÉ produit pour éviter du texte invisible]**.
 - **REQ-SET-34 (P2)** — **Hide from screen recordings** (toggle, défaut off, `hideFromScreenRecording`) : applique `sharingType = .none` aux fenêtres notch (REQ-NUI-09).
 - **REQ-SET-35 (P1)** — **Display** : picker `Built-in first / Active screen / <liste des écrans par nom>` (défaut **Built-in first**, clé `preferredScreen`) ; la liste est rafraîchie sur `didChangeScreenParametersNotification`. Un écran choisi puis débranché → retour automatique à `Built-in first` avec sous-texte informatif. **[TRANCHÉ produit — AgentPeek ne documente pas ce réglage ; requis par REQ-NUI-14]**
@@ -108,7 +108,7 @@ Tous les contrôles de cet onglet mutent `AppSettings` et sont reflétés par le
 - **REQ-SET-58 (P0)** — **Check « Cursor database »** : ouverture lecture seule de `state.vscdb`, requête sentinelle sur `ItemTable`, tolérance `SQLITE_BUSY` (3 tentatives espacées de 100 ms). Échec → `warning` (« Cursor database is locked or unreadable — sessions fall back to hooks only »), remède **Retry** ; schéma inconnu (`_v` inattendu) → `warning` versionnée.
 - **REQ-SET-59 (P0)** — **Checks « Claude usage » / « Cursor usage »** : reflètent `UsageStore.health` (REQ-USG-34) — credentials lisibles + dernier poll réussi (< 15 min). Détails typés : refus Keychain (« Keychain access was denied » → remède **Retry Keychain**), 401 persistant (« Sign in to Claude Code again » → lien doc), 429 (« Rate limited — retrying automatically »), réseau (« Offline — last success at 14:02 »), toggle off → `info` « Disabled in Usage settings » + remède **Open Usage Settings** (bascule d'onglet).
 - **REQ-SET-60 (P0)** — **Check « Notification permission »** : si `notificationsMasterEnabled`, exige `authorizationStatus == .authorized` (`.provisional` accepté avec `warning`). `.denied` → `failed`, remède **Open System Settings** ; `.notDetermined` → `warning`, remède **Request Permission**. Master off → `info` « Notifications disabled in settings ».
-- **REQ-SET-61 (P1)** — **Check « App version »** : `passed` si le dernier check Sparkle date de < 24 h et n'a pas trouvé de mise à jour ; mise à jour disponible → `warning` « Version X.Y.Z is available », remède **Check for Updates…** (déclenche `SPUUpdater.checkForUpdates()`) ; impossible de vérifier (hors ligne) → `warning` datée. L'horodatage vient de `SPUUpdater.lastUpdateCheckDate` **[VÉRIFIÉ doc Sparkle]**, le résultat « pas de MàJ » est mémorisé via le delegate **[HYPOTHÈSE — API delegate exacte à confirmer]**.
+- **REQ-SET-61** — supprimé (décision one-shot du 3 juillet 2026 : l'app ne vérifie jamais si une version plus récente existe — aucun check « version à jour », aucun check licence ; le Doctor conserve hooks/IPC/transcripts/usage/notifications).
 - **REQ-SET-62 (P1)** — **Check « Performance »** : consomme l'auto-mesure `task_info` (30 s, architecture §6) — `warning` si 3 échantillons consécutifs dépassent un budget (RAM ≥ 150 Mo ou CPU idle ≥ 0,5 %), avec valeurs affichées (« Memory 182 MB — budget 150 MB »). Remède : **Restart AgentDash** (relance propre). C'est le pendant produit des « réductions RAM/CPU » v0.2.6–0.2.7.
 - **REQ-SET-63 (P1)** — **Check « Hook coexistence »** : détecte des entrées de hooks **tierces** sur les mêmes événements de décision (ex. AgentPeek) → `info` « Another tool also handles permission prompts (…) — both will receive events » ; **aucun remède automatique** (interdiction de toucher aux entrées tierces, REQ-VIS-17), lien documentation. Couvre le risque R5.
 - **REQ-SET-64 (P1)** — **Checks annexes** : « Login item » (cohérence `SMAppService.status` ↔ réglage, remède **Open Login Items**) ; « Config backups » (`info`, liste des `.bak` de `~/.agentdash/backups`, remède **Reveal in Finder**) ; « Agent versions » (P2, plancher de version Claude — `03` §5 cas 5, hypothèse claude-code n°8).
@@ -117,11 +117,12 @@ Tous les contrôles de cet onglet mutent `AppSettings` et sont reflétés par le
 ### 2.8 Onglet About
 
 - **REQ-SET-66 (P0)** — En-tête : icône de l'app (64 pt), nom « AgentDash » (via `ProductIdentity` — nom provisoire), « Version {CFBundleShortVersionString} ({CFBundleVersion}) », copyright. Un clic sur la version la copie dans le presse-papiers (P2).
-- **REQ-SET-67 (P0)** — Section **Updates** : bouton **Check for Updates…** (`SPUUpdater.checkForUpdates()`), toggle **Automatically check for updates** (défaut **on**, `automaticUpdateChecks`, intervalle 3600 s — checks horaires **[VÉRIFIÉ features §10]**), toggle **Receive beta updates** (défaut off, `betaChannel`, canal Sparkle `beta`), ligne « Last checked: {date relative} » depuis `lastUpdateCheckDate`.
-- **REQ-SET-68 (P1)** — Section **Resources** — liens : **Documentation** (site), **Changelog**, **What's New** (rouvre la fenêtre What's New de la version courante), chacun via `NSWorkspace.shared.open`.
+- **REQ-SET-67** — supprimé (décision one-shot du 3 juillet 2026 : ni bouton « Check for Updates… », ni toggle d'auto-update, ni canal bêta — aucun mécanisme de mise à jour automatique ; remplacé par REQ-SET-72).
+- **REQ-SET-68 (P1)** — Section **Resources** : lien **Documentation** ouvrant la documentation locale (le dossier `plan/` livré avec le produit) via `NSWorkspace.shared.open` ; aucun lien web, aucune fenêtre What's New.
 - **REQ-SET-69 (P0)** — Section **Logs** : **Open Logs Folder** (révèle `~/Library/Logs/AgentDash/`) et **Export Logs…** (même action que Doctor, REQ-SET-65) **[VÉRIFIÉ features §10 « accès aux fichiers de log »]**.
-- **REQ-SET-70 (P1)** — Section **Acknowledgements** : liste déroulante des dépendances OSS avec licences (Sparkle, KeyboardShortcuts) — contenu généré au build depuis les packages **[VÉRIFIÉ features §10 « remerciements »]**.
-- **REQ-SET-71 (P1)** — Ligne **License** : état courant (« Licensed » / « Trial — 31 h left » / « Trial expired ») + bouton **Manage License…** ouvrant la fenêtre d'activation (LicensingKit — fichier distribution/licensing).
+- **REQ-SET-70 (P1)** — Section **Acknowledgements** : liste déroulante des dépendances OSS avec licences (KeyboardShortcuts) — contenu généré au build depuis les packages **[VÉRIFIÉ features §10 « remerciements »]**.
+- **REQ-SET-71** — supprimé (décision one-shot du 3 juillet 2026 : ni licence, ni trial, ni fenêtre d'activation).
+- **REQ-SET-72 (P0)** — Section **Update** : ligne statique — texte principal `To update: replace AgentDash.app with a newer build.`, sous-texte `Settings, hooks and backups are preserved.` — sans aucun bouton ni requête réseau. L'onglet About se compose ainsi exclusivement de : en-tête version + build (REQ-SET-66), section Update (cette REQ), Resources (REQ-SET-68), Logs — Open Logs Folder / Export Logs… (REQ-SET-69), Acknowledgements (REQ-SET-70).
 
 ---
 
@@ -174,7 +175,7 @@ public enum DoctorCheckID: String, CaseIterable, Sendable {
     case claudeTranscripts, cursorDatabase
     case claudeUsage, cursorUsage
     case notificationPermission, loginItem, performance
-    case appVersion, configBackups, agentVersions
+    case configBackups, agentVersions
 }
 
 public struct DoctorFinding: Identifiable, Sendable {
@@ -192,7 +193,7 @@ public struct DoctorRemedy: Sendable {
 public enum DoctorAction: Sendable {
     case repairHooks(AgentKind), reinstallRelayBinary, restartIPCServer, recreateSocket
     case restartIngestion(AgentKind), retryKeychain, requestNotificationPermission
-    case openSystemSettings(pane: String), openLoginItems, checkForUpdates
+    case openSystemSettings(pane: String), openLoginItems
     case rebuildDailyStats, revealPath(String), openURL(URL), openTab(SettingsTab), restartApp
 }
 
@@ -213,7 +214,7 @@ public final class DoctorStore {
 }
 ```
 
-`DoctorContext` injecte les dépendances (les deux `HooksInstaller`, `HookServer`, `UsageStore.health`, `TranscriptIngestor.stats`, `CursorStateReader`, `SPUUpdater`, `UNUserNotificationCenter`). Chaque check individuel est plafonné à **5 s** (au-delà : `warning` « Check timed out ») pour que `runAll()` ne gèle jamais l'onglet.
+`DoctorContext` injecte les dépendances (les deux `HooksInstaller`, `HookServer`, `UsageStore.health`, `TranscriptIngestor.stats`, `CursorStateReader`, `UNUserNotificationCenter`). Chaque check individuel est plafonné à **5 s** (au-delà : `warning` « Check timed out ») pour que `runAll()` ne gèle jamais l'onglet.
 
 ### 3.3 Self-test round-trip (REQ-SET-55) — séquence
 
@@ -351,7 +352,6 @@ SYSTEM
  ✓ Performance              Memory 96 MB · CPU 0.2 %
 
 APP
- ✓ App version            0.1.0 — checked 12 m ago
  ○ Config backups         3 backups                     (Reveal in Finder)
 ──────────────────────────────────────────────────────────────
 TOOLS   (Rebuild Daily Stats) (Export Logs…) (Open Logs Folder)
@@ -376,6 +376,7 @@ Icônes : ✓ `checkmark.circle.fill` vert, ⚠ `exclamationmark.triangle.fill` 
 | Note raccourcis | `Prompt shortcuts are only active while a prompt is visible.` |
 | Synthèse Doctor OK | `All checks passed` |
 | Synthèse Doctor KO | `N issues found` |
+| Mise à jour manuelle (About) | `To update: replace AgentDash.app with a newer build.` |
 | Health notice (cf. 09) | `Usage may be inaccurate — check Doctor` |
 | Dernière surface off | `AgentDash will have no visible surface. Reopen it from Finder or Spotlight to show Settings again.` |
 
@@ -403,7 +404,7 @@ Icônes : ✓ `checkmark.circle.fill` vert, ⚠ `exclamationmark.triangle.fill` 
 11. **Écran sélectionné dans Display débranché** : retour à `Built-in first` + sous-texte « Previous display is disconnected » ; re-sélection possible quand il revient.
 12. **Doctor pendant une réparation de hooks en cours** : les actions install/repair/uninstall sont sérialisées par agent (un seul `installOrRepair()` en vol) ; le check attend la fin (dans son plafond de 5 s) ou affiche « Repair in progress ».
 13. **Check Doctor qui dépasse 5 s** (disque lent, SQLite verrouillée) : `warning` « Check timed out » — `runAll()` n'est jamais bloquée par un check.
-14. **Sparkle hors ligne** : « Check for Updates… » affiche l'erreur Sparkle native ; le check « App version » passe `warning` daté, jamais `failed` (le réseau n'est pas une panne de l'app).
+14. *Supprimé (décision one-shot du 3 juillet 2026)* — plus aucun mécanisme de mise à jour, donc plus de cas « Sparkle hors ligne ».
 15. **Keychain refusé au moment du Retry** (REQ-SET-37) : l'invite peut réapparaître ; refus → l'état reste « Keychain access needed », jauges `--`, aucun re-prompt en boucle (au plus 1 par action utilisateur).
 16. **Quit via power button avec prompts en attente** : auto-libération de tous les `PendingPrompt` (réponse vide) avant `terminate` — les agents reprennent leurs dialogues natifs, aucune session bloquée (fail-open, invariant architecture §7.1).
 17. **`~/.agentdash/bin` non inscriptible** (permissions cassées) : « Reinstall Helper » échoue proprement → détail avec le chemin et l'erreur POSIX, remède **Reveal in Finder** ; jamais de crash.
@@ -423,7 +424,7 @@ Icônes : ✓ `checkmark.circle.fill` vert, ⚠ `exclamationmark.triangle.fill` 
 8. **Doctor round-trip** — Given l'app saine, When j'ouvre Doctor, Then tous les checks passent en moins de 2 s et « Hook relay round-trip » affiche une latence chiffrée ; When je supprime `~/.agentdash/bin/agentdash-hook` et relance Run Checks, Then « Helper binary » passe rouge, un clic sur Reinstall Helper le répare et le round-trip repasse vert automatiquement.
 9. **Doctor badge & health notice** — Given le Wi-Fi coupé et 3 polls d'usage échoués, When je regarde la sidebar, Then Doctor porte un badge, le notch affiche « Usage may be inaccurate — check Doctor », et un clic sur ce badge ouvre l'onglet Doctor sur le check « Claude usage » en warning avec l'horodatage du dernier succès.
 10. **Permission notifications refusée** — Given la permission retirée dans System Settings, When j'ouvre l'onglet Notifications, Then la bannière s'affiche et « Open System Settings » ouvre le volet Notifications ; le check Doctor correspondant est rouge avec le même remède.
-11. **About/Updates** — Given l'onglet About, When je clique Check for Updates…, Then la fenêtre Sparkle standard apparaît ; Then la ligne « Last checked » se met à jour, et « Automatically check for updates » désactivé stoppe les checks horaires (aucune requête appcast pendant 2 h, vérifiable au proxy).
+11. **About one-shot** — Given l'onglet About, Then il affiche la version + build, la ligne statique « To update: replace AgentDash.app with a newer build. », le lien Documentation locale, les boutons Logs et la liste Acknowledgements ; et aucune requête réseau n'est émise depuis cet onglet (vérifiable au proxy pendant toute la session).
 12. **États réels** — Given launch at login activé puis l'app retirée des Login Items dans System Settings, When je rouvre l'onglet General, Then le toggle reflète l'état système réel (off ou approval requis), pas la valeur mémorisée.
 
 ---
@@ -434,15 +435,15 @@ Icônes : ✓ `checkmark.circle.fill` vert, ⚠ `exclamationmark.triangle.fill` 
 
 | Fichier | Ce que 13 en consomme / lui impose |
 |---|---|
-| `01-architecture.md` | modules SettingsKit/DoctorKit, budgets auto-mesure (check Performance), logging/export (§7.3), Sparkle (A7) |
-| `02-data-model.md` | `AppSettings` (toutes les clés et défauts cités), `HooksStatus`, `NotificationKind.test`, `UsageAccount`, `CursorUsageMeasure` — **impose** l'ajout de `menuBarShowsUsage: Bool = true` (déjà demandé par `06`) et confirme `betaChannel`/`automaticUpdateChecks` |
+| `01-architecture.md` | modules SettingsKit/DoctorKit, budgets auto-mesure (check Performance), logging/export (§7.3) |
+| `02-data-model.md` | `AppSettings` (toutes les clés et défauts cités), `HooksStatus`, `NotificationKind.test`, `UsageAccount`, `CursorUsageMeasure` — **impose** l'ajout de `menuBarShowsUsage: Bool = true` (déjà demandé par `06`) et la suppression des clés `betaChannel`/`automaticUpdateChecks` (décision one-shot) |
 | `03-integration-claude-code.md` | REQ-CLA-04 (définition de « Ready »), REQ-CLA-03 (backups listés), REQ-CLA-06 (re-check périodique), REQ-CLA-10 (resync binaire), REQ-CLA-66 (retry Keychain) |
 | Fichier intégration Cursor (`04`, en cours) | `HooksInstaller` Cursor (statuts, création de `hooks.json`), check « Cursor database » (détails SQLite), état de connexion usage Cursor |
 | `05-notch-ui.md` | REQ-NUI-10/14/21/26/44 (effets des toggles, panel ouvert pendant Settings, verrou pill usage) ; ce fichier lui fournit la zone anti-chevauchement (REQ-SET-04) |
 | `06-menubar.md` | REQ-MBR-01 (toggle), REQ-MBR-26 (avertissement aucune surface), item « Settings… » du popover |
 | `09-token-usage.md` | REQ-USG-06/27/33/34 (toggles, Rebuild stats, health notice → Doctor, états de santé) |
 | `10-local-servers.md` | REQ-SRV-08 (exclusions de scan dans la zone Advanced de Doctor) |
-| Fichiers notifications, prompts, licensing/distribution (en cours) | émission effective des notifications (ce fichier ne fait que les régler), portée exacte de `promptHandling`, fenêtre d'activation (REQ-SET-71), What's New |
+| Fichiers notifications, prompts, `14-onboarding-distribution.md` | émission effective des notifications (ce fichier ne fait que les régler), portée exacte de `promptHandling`, onboarding et modèle de mise à jour manuelle (repris par REQ-SET-72) |
 
 ### 7.2 Risques
 
@@ -451,7 +452,7 @@ Icônes : ✓ `checkmark.circle.fill` vert, ⚠ `exclamationmark.triangle.fill` 
 | S1 | Sémantique exacte de « prompt handling location » d'AgentPeek inconnue (3 valeurs = interprétation) | Moyen (UX divergente) | REQ-SET-13 marquée hypothèse ; sémantique testée au banc prompts ; ajustable sans migration (enum `PromptHandling` déjà à 3 cas) |
 | S2 | Détection de conflits de raccourcis limitée : l'échec `RegisterEventHotKey` n'est observable qu'à l'armement (prompt visible) | Faible | armement d'essai immédiat à l'assignation (REQ-SET-45) + bannière persistante alimentée par les échecs réels |
 | S3 | Attribut quarantaine sur le binaire copié (check REQ-SET-54) : comportement Gatekeeper en build signée réelle non encore mesuré | Élevé (risque R4 de `00`) | le round-trip (REQ-SET-55) détecte le blocage quel qu'en soit le mécanisme ; banc system-integration n°4 avant release |
-| S4 | API delegate Sparkle pour mémoriser « pas de mise à jour trouvée » à confirmer | Faible | fallback : le check n'affiche que la date du dernier check (toujours disponible) |
+| S4 | — supprimé (décision one-shot du 3 juillet 2026 : plus de Sparkle) | — | — |
 | S5 | Un remède Doctor qui échoue en boucle (ex. disque plein) pourrait inciter au clic répété | Faible | après 2 échecs consécutifs du même remède, le bouton devient « See details » (log + chemin), plus de re-run auto |
 | S6 | Divergence défauts AgentPeek/AgentDash (défauts non documentés : seuils 80 %, largeurs sidebar) | Faible | valeurs marquées [TRANCHÉ produit], centralisées dans `AppSettings` — ajustement en une ligne |
 
@@ -471,9 +472,9 @@ Icônes : ✓ `checkmark.circle.fill` vert, ⚠ `exclamationmark.triangle.fill` 
 | S8 | Onglet Shortcuts : recorders KeyboardShortcuts, conflits internes, armement d'essai, bannière d'échec, Restore Defaults | **M** | S2, fichier prompts (hotkeys) |
 | S9 | DoctorKit noyau : `DoctorCheck`/`DoctorFinding`/`DoctorStore`, `runAll()` TaskGroup + timeouts, dispatch des remèdes, re-checks de fond + badge | **L** | DashCore |
 | S10 | Checks Hooks & IPC : claudeHooks, cursorHooks, relayBinary (hash + quarantaine), **relayRoundTrip** (self-test spawné), ipcSocket, hookCoexistence | **L** | S9, 03/04, HookServer |
-| S11 | Checks Data/Usage/System/App : transcripts, DB Cursor, usage ×2 (ingestion `UsageStore.health`), notifications, login item, performance (task_info), app version (Sparkle), backups | **L** | S9, 03/04/09 |
+| S11 | Checks Data/Usage/System/App : transcripts, DB Cursor, usage ×2 (ingestion `UsageStore.health`), notifications, login item, performance (task_info), backups | **L** | S9, 03/04/09 |
 | S12 | Onglet Doctor UI : liste groupée, états visuels, Tools (Rebuild stats, Export logs, Open folder), zone Advanced | **M** | S9–S11 |
-| S13 | Onglet About : identité, Sparkle (check now, auto, beta, last checked), liens, logs, acknowledgements générés, ligne licence | **M** | S1, LicensingKit |
+| S13 | Onglet About : identité (version + build), ligne statique de mise à jour manuelle, lien documentation locale, logs, acknowledgements générés | **S** | S1 |
 | S14 | Export de logs : zip (rotation + `OSLogStore` 24 h + rapport Doctor JSON), `NSSavePanel` | **S** | S12 |
 | S15 | Tests : décodage tolérant des defaults, sérialisation des actions hooks, simulation des 16 checks (contexte mocké), conflits de raccourcis | **M** | S2, S9 |
 | S16 | Banc manuel : checklist des 12 critères d'acceptation §6, rejouée à chaque release | **S** | tout |

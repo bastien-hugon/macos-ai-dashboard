@@ -187,7 +187,7 @@ Le file watcher de Claude Code recharge les settings à chaud → les sessions d
 
 ### 4.3 Séquence de démarrage de l'app
 
-1. `LicenseManager.load()` (Keychain + fichier, fusion pessimiste) — détermine l'UI d'accueil (onboarding / achat / normal).
+1. Détermination de l'écran d'accueil : premier lancement (drapeau UserDefaults) → fenêtre d'onboarding, sinon démarrage normal. *(Ancienne étape `LicenseManager.load()` — supprimée, décision one-shot du 3 juillet 2026.)*
 2. Suppression du socket périmé, démarrage de `HookServer` (le canal doit être prêt **avant** tout le reste : des hooks peuvent arriver immédiatement).
 3. Resynchronisation de `~/.agentdash/bin/agentdash-hook` (comparaison de hash = « réparer »).
 4. Vérification/fusion des hooks (si toggles actifs) + snapshot Doctor.
@@ -202,7 +202,7 @@ Le file watcher de Claude Code recharge les settings à chaud → les sessions d
 
 | Contexte d'exécution | Contenu | Notes |
 |---|---|---|
-| **@MainActor** | tous les stores `@Observable` (`SessionStore`, `PromptStore`, `UsageStore`, `ServerStore`, `SettingsStore`, `LicenseStore`, `DoctorStore`), fenêtres/panels, hotkeys, `EventRouter` (mutation d'état finale) | Les stores sont la **seule** source de vérité UI ; mutations uniquement sur MainActor → SwiftUI observe sans verrous. |
+| **@MainActor** | tous les stores `@Observable` (`SessionStore`, `PromptStore`, `UsageStore`, `ServerStore`, `SettingsStore`, `DoctorStore`), fenêtres/panels, hotkeys, `EventRouter` (mutation d'état finale) | Les stores sont la **seule** source de vérité UI ; mutations uniquement sur MainActor → SwiftUI observe sans verrous. |
 | **`HookServer`** (queue dédiée `NWListener`) | accept/framing NDJSON des connexions du hook | Chaque événement est transformé en `DashEvent: Sendable` puis `await`é sur MainActor. La **réponse** (closure `reply`) capture la connexion : la décision de l'utilisateur, prise sur MainActor, est renvoyée sur la queue réseau. |
 | **`actor TranscriptIngestor`** | callback FSEvents (queue dédiée), `stat()` + lecture incrémentale, parsing `JSONDecoder` ligne à ligne, agrégation en `SessionDelta` | Debounce par chemin : max 1 drain / 250 ms / fichier (la latence FSEvents de 0,3 s coalesce déjà). Publication par **lots** vers MainActor (1 `SessionDelta` groupé par tick, jamais 1 par ligne). |
 | **`actor CursorStateReader`** | connexion SQLite RO persistante, requêtes ciblées, diff avec le snapshot précédent | Poll adaptatif : 1,5 s si ≥ 1 session Cursor non idle, 10 s sinon, 0 si Cursor absent. |
@@ -216,7 +216,7 @@ Le file watcher de Claude Code recharge les settings à chaud → les sessions d
 - **Aucun** parsing, I/O disque, SQLite ou libproc sur MainActor. Le MainActor ne fait que muter les stores et rendre l'UI.
 - Debounce UI : les compteurs de tokens mid-turn sont mis à jour au plus toutes les **300 ms** par session (coalescence dans `TranscriptIngestor`) — au-delà, imperceptible et coûteux en re-render.
 - Les hooks « décision » (`PermissionRequest`, `PreToolUse` sur `AskUserQuestion`/`ExitPlanMode`, `beforeShellExecution`/`beforeMCPExecution` Cursor) gardent leur connexion **ouverte** jusqu'à la décision, l'auto-libération (réponse vide à `timeout − 10 s`) ou la fermeture du prompt. Les hooks « télémétrie » sont fire-and-forget (réponse vide immédiate).
-- Timers : un seul `DispatchSourceTimer` mutualisé par fréquence (1 s pour l'horloge/countdowns, 30 s pour l'auto-mesure, échéances armées à date exacte pour trial et rollover de fenêtres d'usage), plus `NSWorkspace.didWakeNotification` pour réévaluer après sommeil (les timers ne tirent pas pendant le sommeil — VÉRIFIÉ).
+- Timers : un seul `DispatchSourceTimer` mutualisé par fréquence (1 s pour l'horloge/countdowns, 30 s pour l'auto-mesure, échéances armées à date exacte pour le rollover des fenêtres d'usage), plus `NSWorkspace.didWakeNotification` pour réévaluer après sommeil (les timers ne tirent pas pendant le sommeil — VÉRIFIÉ).
 
 ---
 
@@ -254,7 +254,7 @@ Le file watcher de Claude Code recharge les settings à chaud → les sessions d
 
 ### 7.3 Logging
 
-- **OSLog** (`Logger`, subsystem `com.<org>.agentdash`, catégories : `hooks`, `ipc`, `claude`, `cursor`, `servers`, `usage`, `ui`, `licensing`, `doctor`) — niveau `.debug` non persistant, `.info`+ persistant.
+- **OSLog** (`Logger`, subsystem `com.<org>.agentdash`, catégories : `hooks`, `ipc`, `claude`, `cursor`, `servers`, `usage`, `ui`, `doctor`) — niveau `.debug` non persistant, `.info`+ persistant.
 - **Fichier exportable** : miroir des niveaux `.notice`+ vers `~/Library/Logs/AgentDash/agentdash.log` (rotation 5 × 2 Mo), via un `actor LogSink`. Bouton « Export logs » (Settings→About et Doctor) : zip du dossier + `OSLogStore` des dernières 24 h + rapport Doctor JSON. **Aucun contenu de prompt/réponse/diff dans les logs** — uniquement des identifiants, tailles et codes d'erreur (promesse privacy).
 - `agentdash-hook` ne logge rien par défaut (stdout est le canal de décision !) ; mode debug opt-in via `~/.agentdash/debug` (fichier drapeau) → append vers `~/Library/Logs/AgentDash/hook.log`.
 
@@ -263,11 +263,11 @@ Le file watcher de Claude Code recharge les settings à chaud → les sessions d
 ## 8. Sécurité et vie privée by design
 
 1. **Tout local** : transcripts, diffs, prompts, état des sessions ne quittent jamais la machine. Aucune télémétrie, aucun compte, aucun analytics (contrat AgentPeek §12 repris à l'identique).
-2. **Réseau limité à 4 destinations**, chacune désactivable : `api.anthropic.com` (usage Claude, opt-out dans Settings→Usage), `cursor.com` (usage Cursor, opt-out), l'appcast Sparkle (checks horaires), le Worker de licence (activation/revalidation ; transmet uniquement clé + `SHA-256(IOPlatformUUID + sel)` + version d'app).
+2. **Réseau limité à 2 destinations**, chacune désactivable : `api.anthropic.com` (usage Claude, opt-out dans Settings→Usage) et `cursor.com` (usage Cursor, opt-out). Aucune autre destination — ni appcast, ni serveur de licence : zéro infrastructure distante propre (décision one-shot du 3 juillet 2026).
 3. **Socket IPC** : dossier `0700`, socket `0600` → seul l'utilisateur courant se connecte (permissions POSIX, VÉRIFIÉ en principe). Le protocole n'exécute rien : données + décisions typées.
 4. **Périmètre processus** : libproc en `PROC_UID_ONLY`, garde-fous de kill (PID ≥ 100, uid == user, re-validation `(start_time, execPath)` anti-réutilisation de PID, jamais soi-même/ancêtre, confirmation UI en 2 temps, jamais `killpg`).
 5. **Écritures de config tierces minimales et réversibles** : fusion non destructive de `~/.claude/settings.json` et `~/.cursor/hooks.json` (préservation des hooks tiers, marqueur `agentdash` pour identifier nos entrées), sauvegarde `.bak` horodatée avant première écriture, désinstallation propre (toggle off = retrait de nos entrées uniquement).
-6. **Secrets** : tokens Claude/Cursor lus à la demande, jamais persistés par AgentDash, jamais envoyés ailleurs que vers leur service d'origine ; clés privées (Sparkle EdDSA, licence Ed25519) jamais dans le repo ni dans l'app.
+6. **Secrets** : tokens Claude/Cursor lus à la demande, jamais persistés par AgentDash, jamais envoyés ailleurs que vers leur service d'origine ; seul secret de build restant, le certificat Developer ID, détenu côté CI — jamais dans le repo ni dans l'app.
 7. **Pas d'API privées** (CGSSpace/SkyLight écartés — VÉRIFIÉ notch-ui), pas de permission TCC requise (ni Accessibility ni Full Disk Access — VÉRIFIÉ), hotkeys via `RegisterEventHotKey` **éphémères** (enregistrées uniquement pendant qu'un prompt est visible).
 8. Option `sharingType = .none` (« masquer le notch des enregistrements d'écran ») offerte dans Appearance.
 
@@ -279,7 +279,6 @@ Le file watcher de Claude Code recharge les settings à chaud → les sessions d
 - **AgentClaude / AgentCursor** : tests sur fixtures — transcripts JSONL réels anonymisés (types `user`/`assistant`/`attachment`/`ai-title`…, lignes de 70 Ko, entrées streaming dupliquées) et `state.vscdb` minimal généré (schéma `_v: 16`, `bubbleId:`/`composerData:`) ; le parseur doit **ignorer les types inconnus** sans erreur (tolérance aux versions).
 - **HookRelay ↔ HookServer** : tests d'intégration croisés (le protocole n'est pas partagé en code — cf. §3.2) : nominal, socket absent (`.waiting` → exit 0 silencieux), réponse lente, ligne géante, app tuée en cours d'attente.
 - **ServersKit** : test de conformité contre `lsof -F` sur la machine de CI (le même check que Doctor).
-- **LicensingKit** : simulation d'horloge injectée (`ClockProvider` protocolisé) — rollback, sommeil, reboot, divergence Keychain/fichier.
 - **UI** : smoke tests manuels scriptés (checklist par release) ; les tests automatisés d'un `NSPanel` non-activant sont peu fiables — assumé.
 - **Bancs d'hypothèses** : chaque hypothèse numérotée des recherches reçoit un mini-programme de validation dans `scripts/experiments/` (ex. `PermissionRequest` interactif, `updatedInput.answers`, timeout hooks Cursor) exécuté AVANT de construire la feature dépendante.
 
@@ -295,11 +294,11 @@ Le file watcher de Claude Code recharge les settings à chaud → les sessions d
 | A4 | SwiftUI dans AppKit ; `NSPanel` non-activant key-able ; `NSStatusItem` AppKit (pas `MenuBarExtra`) | Ferme |
 | A5 | Swift 6 strict concurrency ; stores `@Observable` sur MainActor ; ingestion en actors | Ferme |
 | A6 | macOS 14+, arm64 ; Liquid Glass via `agentGlass()` avec fallback `NSVisualEffectView` | Ferme |
-| A7 | Pas de sandbox ; Developer ID + notarisation ; DMG + Sparkle (checks 3600 s) | Ferme |
+| A7 | Pas de sandbox ; Developer ID + notarisation ; DMG — sans auto-update, mise à jour manuelle (cf. A11) | Ferme |
 | A8 | Xcode + packages SPM locaux, dépendances orientées `DashCore` sans imports transverses | Ferme |
 | A9 | Budgets : RAM < 150 Mo, CPU idle < 0,5 %, hook → UI < 150 ms, auto-mesure Doctor | Cibles à calibrer |
 | A10 | Fail-open partout ; santé par flux ; jauges qui retiennent la dernière valeur | Ferme |
-| A11 | Licence : Lemon Squeezy + Worker Cloudflare + reçu Ed25519 offline ; trial 48 h anti-rollback (`mach_continuous_time` + high-water mark + accumulateur) | Ferme (hypothèses LS n°3-4 distribution-licensing à valider) |
+| A11 | Logiciel one-shot : ni trial, ni licence, ni serveur d'activation, ni auto-update — mise à jour par remplacement manuel de `AgentDash.app` dans /Applications ; la resynchronisation de `~/.agentdash/bin` au lancement met à jour le binaire hook ; réglages UserDefaults et sauvegardes `.bak` conservés ; zéro infrastructure distante (remplace l'ancienne décision licence — 3 juillet 2026) | Ferme |
 
 ### Hypothèses majeures suivies (voir les listes détaillées des recherches)
 

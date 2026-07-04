@@ -432,35 +432,9 @@ struct NotificationEvent: Identifiable, Sendable {
 
 ---
 
-## 6. Trial, licence, réglages
+## 6. Réglages
 
-```swift
-// — Trial (LicensingKit) — anti-rollback complet [VÉRIFIÉ distribution-licensing §3]
-struct TrialState: Codable, Sendable {
-    var trialStart: Date               // fusion pessimiste : le plus ANCIEN des 2 stockages gagne
-    var highWaterMark: Date            // « dernière heure vue » — ne recule jamais
-    var elapsedSeconds: UInt64         // accumulé par deltas mach_continuous_time POSITIFS uniquement
-    var machineIdHash: String          // SHA-256(IOPlatformUUID + sel)
-    var version: Int                   // schéma du blob (HMAC-SHA256 par-dessus)
-}
-// expired = (effectiveNow ≥ trialStart + 48 h) || (elapsedSeconds ≥ 48 h) ; le plus défavorable gagne.
-
-enum LicenseState: Equatable, Sendable {
-    case onboarding                    // premier lancement, choix pas encore fait
-    case trial(remaining: TimeInterval)
-    case trialExpired                  // → écran d'achat immédiat, notch verrouillé (pill grisée)
-    case licensed(LicenseReceipt)
-    case graceOffline(LicenseReceipt, since: Date)   // revalidation impossible, grâce 14 j
-    case revoked(reason: String)       // refund/disabled confirmé par le serveur
-    case tampered                      // incohérences d'horloge répétées (faille v0.2.9 fermée jour 1)
-}
-struct LicenseReceipt: Codable, Equatable, Sendable {
-    var keyHash: String; var machineIdHash: String
-    var instanceID: String             // instance Lemon Squeezy (deactivate)
-    var issuedAt: Date; var licenseVersion: Int
-    var signature: Data                // Ed25519, vérifiée offline à chaque lancement (CryptoKit)
-}
-```
+> `TrialState`, `LicenseState`, `LicenseReceipt` — supprimés (décision one-shot du 3 juillet 2026). Disparaissent avec eux tous les mécanismes associés : double stockage Keychain + fichier scellé HMAC, anti-rollback d'horloge (`mach_continuous_time`, high-water mark), reçu d'activation signé Ed25519, grâce hors-ligne, révocation. La numérotation de la section est conservée ; seul `AppSettings` (§6.1) subsiste.
 
 ### 6.1 AppSettings — exhaustif, avec défauts **[TRANCHÉ, défauts calqués sur AgentPeek quand connus]**
 
@@ -498,8 +472,8 @@ struct AppSettings: Codable, Sendable {
     var pillUsageMode = false                    // jauges live dans le pill réduit
     var pillHideWhenIdle = false
     var pillExpandedOnly = false
-    var glassOpacity: Double = 0.55              // 0…1 ; 1.0 = Opaque (désactive réellement le blur)
-    var frostedRim = true
+    var glassOpacity: Double = 1.0               // 0…1 ; défaut Opaque = noir profond (calibrage 3 juil. 2026)
+    var frostedRim = false                       // liseré off par défaut (calibrage 3 juil. 2026)
     var depthLitEnabled = true
     var metricsOpacity: Double = 0.85
     var hideFromScreenRecording = false          // sharingType = .none
@@ -523,10 +497,8 @@ struct AppSettings: Codable, Sendable {
     var shortcutOpenTerminal = Shortcut(.t, [.option])    // ⌥T
     var shortcutToggleNotch: Shortcut? = nil              // global optionnel
 
-    // Updates / About
-    var automaticUpdateChecks = true             // SUScheduledCheckInterval = 3600 (plancher Sparkle)
-    var betaChannel = false                      // allowedChannels(["beta"])
-    var lastWhatsNewVersion: String = ""         // fenêtre What's New post-update
+    // Updates / About : automaticUpdateChecks, betaChannel, lastWhatsNewVersion —
+    // supprimés (décision one-shot du 3 juillet 2026 : ni auto-update, ni canal bêta, ni What's New)
 
     // Avancé (exposé dans Doctor)
     var serverScanEnabled = true
@@ -564,12 +536,12 @@ enum ScreenSelection: Codable, Sendable { case builtinThenMain, uuid(String), ac
 | Donnée | Emplacement | Détails |
 |---|---|---|
 | Sessions, timelines, prompts en attente, état des jauges, serveurs | **Mémoire uniquement** | entièrement reconstructible : transcripts + registre + DB Cursor + un refresh usage. Redémarrer AgentDash ne perd rien d'important. |
-| `AppSettings`, `FastAction[]`, `lastWhatsNewVersion`, sélection de compte, largeurs/densité | **UserDefaults** (`com.<org>.agentdash`) | struct codée en clés plates (migration facile) ; écriture débouncée 500 ms. |
+| `AppSettings`, `FastAction[]`, sélection de compte, largeurs/densité | **UserDefaults** (`com.<org>.agentdash`) | struct codée en clés plates (migration facile) ; écriture débouncée 500 ms ; survit au remplacement manuel de `AgentDash.app`. |
 | Offsets de tail des transcripts | **Mémoire** (v1) + **snapshot fichier optionnel** `~/Library/Application Support/AgentDash/state/tail-offsets.json` | v1 : recalcul au lancement (parse si `mtime` < 48 h, sinon `offset = taille`) [VÉRIFIÉ suffisant à 2 Mo]. Le snapshot `{path, inode, size, offset}` ne s'active que si le chargement initial dépasse 1 s (hypothèse system-integration n°8) ; entrée invalidée si `inode` ou `size` incohérents. |
 | Cache d'usage journalier (`DailyUsage`) | **Fichier** `…/AgentDash/state/daily-usage.json` | évite de re-parser tout l'historique JSONL à chaque lancement ; recalculable à tout moment (bouton Doctor « Rebuild stats »). |
 | Journal applicatif | `~/Library/Logs/AgentDash/agentdash.log` (+ `hook.log` opt-in) | rotation 5 × 2 Mo ; jamais de contenu utilisateur. |
-| Trial | **Keychain** (`kSecClassGenericPassword`, service `com.<org>.agentdash.license`, account `trial-state`, `…ThisDeviceOnly`) **et** fichier scellé HMAC (`…/Application Support/<emplacement neutre>`) | fusion pessimiste au lancement : `trialStart` le plus ancien, `highWaterMark`/`elapsedSeconds` les plus grands ; auto-réparation si un des deux manque [VÉRIFIÉ conception §3 distribution-licensing]. |
-| Licence | **Keychain** (même service, account `license-receipt`) + copie fichier de secours | reçu + signature + `instance_id` + clé ; vérification Ed25519 offline à chaque lancement. |
+| Trial | — | supprimé (décision one-shot du 3 juillet 2026). |
+| Licence | — | supprimée (décision one-shot du 3 juillet 2026). |
 | Sauvegardes de configs tierces | `~/.agentdash/backups/settings.json.<ISO>.bak`, `hooks.json.<ISO>.bak` | avant la première écriture de fusion ; consultables depuis Doctor. |
 | Binaire hook | `~/.agentdash/bin/agentdash-hook` | resynchronisé (hash) à chaque lancement de l'app = fonction « réparer ». |
 | Secrets tiers (tokens Claude/Cursor) | **Jamais persistés par AgentDash** | lus à la demande (Keychain « Claude Code-credentials », `ItemTable cursorAuth/*`), gardés en mémoire le temps de la requête. |

@@ -9,7 +9,7 @@
 
 Ce document définit **comment AgentDash est vérifié**, du test unitaire à la release : pyramide de tests automatisés, harnais d'intégration simulant Claude Code et Cursor, tests visuels du notch, bancs de performance contre les budgets chiffrés de `01-architecture.md` §6, checklist de QA manuelle **par feature**, matrice de compatibilité et critères de release.
 
-Sections d'`AGENTPEEK_FEATURES.md` couvertes : ce document ne spécifie aucune feature produit nouvelle mais garantit la vérifiabilité de **toutes** — §2 (hooks, surfaces UI), §3 (sessions), §4 (actions inline), §5 (usage), §6 (serveurs), §7 (Quick Routes), §8 (Fast Actions), §9 (notifications), §10 (Settings/Doctor), §11 (onboarding/licence), §12 (privacy), §14 (périmètre du clone). Les exigences testables (`REQ-*`) des documents 03 à 14 sont la matière première des plans de test ; ce document fournit l'outillage, les corpus et les procédures.
+Sections d'`AGENTPEEK_FEATURES.md` couvertes : ce document ne spécifie aucune feature produit nouvelle mais garantit la vérifiabilité de **toutes** — §2 (hooks, surfaces UI), §3 (sessions), §4 (actions inline), §5 (usage), §6 (serveurs), §7 (Quick Routes), §8 (Fast Actions), §9 (notifications), §10 (Settings/Doctor), §11 (onboarding), §12 (privacy), §14 (périmètre du clone). Les exigences testables (`REQ-*`) des documents 03 à 14 sont la matière première des plans de test ; ce document fournit l'outillage, les corpus et les procédures.
 
 **Dans le périmètre** : infrastructure de testabilité (injection de chemins et d'horloge), corpus de fixtures, générateurs synthétiques, harnais IPC, tests snapshot, bancs de performance, bancs d'hypothèses (`scripts/experiments/`), QA manuelle, compatibilité, gates de release, CI.
 **Hors périmètre** : spécification des features elles-mêmes (documents 03–14), pipeline de build/signature/notarisation (document distribution — les *vérifications* de release sont ici, la *mécanique* est là-bas).
@@ -23,7 +23,7 @@ Cadres retenus **[TRANCHÉ]** : **Swift Testing** (`import Testing`, fourni avec
 ### 2.1 Infrastructure de testabilité
 
 - **REQ-TST-01 (P0)** — **Injection de chemins** : tout accès disque du produit passe par une struct `DashPaths` (définie dans `DashCore`) qui dérive tous les chemins (`~/.claude`, `~/.cursor`, `globalStorage` Cursor, Application Support, socket, `~/.agentdash`) d'une **racine home injectable**. Aucun module ne construit un chemin à partir de `NSHomeDirectory()` directement. En build Debug/Testing, la variable d'environnement `AGENTDASH_HOME` remplace la racine ; en Release, elle est **ignorée** (anti-abus).
-- **REQ-TST-02 (P0)** — **Injection d'horloge** : tout code dépendant du temps (machine à états, rollover de fenêtres d'usage, trial anti-rollback, `isStale`, GC de sessions) consomme un `ClockProvider` protocolisé (déjà acté pour LicensingKit, `01-architecture.md` §9 — généralisé ici). Les tests pilotent le temps sans `sleep`.
+- **REQ-TST-02 (P0)** — **Injection d'horloge** : tout code dépendant du temps (machine à états, rollover de fenêtres d'usage, `isStale`, GC de sessions) consomme un `ClockProvider` protocolisé (stratégie de `01-architecture.md` §9). Les tests pilotent le temps sans `sleep`.
 - **REQ-TST-03 (P0)** — **Override du socket** : `agentdash-hook` et `HookServer` honorent la variable d'environnement `AGENTDASH_SOCKET_OVERRIDE` (chemin de socket alternatif) pour permettre des tests d'intégration hermétiques sans toucher au socket réel. Ignorée en Release côté app ; toujours honorée côté hook (le binaire est le même en test et en prod, le chemin par défaut reste celui de la config installée). **[TRANCHÉ]**
 - **REQ-TST-04 (P0)** — **Garde anti-destruction** : tout test qui écrit (installeurs de hooks, sauvegardes `.bak`, snapshots d'offsets) vérifie en préambule que `DashPaths.home != FileManager.default.homeDirectoryForCurrentUser` et échoue immédiatement sinon. Aucun test ne peut modifier le vrai `~/.claude` ou `~/.cursor` du développeur.
 - **REQ-TST-05 (P0)** — **Mode introspection** : lancée avec `AGENTDASH_TEST_MODE=1` (builds Debug uniquement), l'app expose sur le socket IPC un opcode supplémentaire `{"op":"dump-state"}` retournant un instantané JSON de `SessionStore`/`PromptStore`/`UsageStore` (identifiants et états, jamais de contenu utilisateur). C'est le canal d'assertion des tests bout-en-bout scriptés. **[TRANCHÉ]**
@@ -49,7 +49,7 @@ Cadres retenus **[TRANCHÉ]** : **Swift Testing** (`import Testing`, fourni avec
 - **REQ-TST-16 (P0)** — **Détection de frameworks (ServersKit)** : la fonction d'identification est **pure** — entrée `(execPath, argv, env, cwd, port)`, sortie `(FrameworkKind?, RuntimeKind?, PackageRunner?, displayName)` — et testée par table sur des relevés réels : `node …/next dev`, `node …/vite`, `astro dev`, `wrangler dev`, `storybook dev`, Playwright, `python -m http.server`, `bun run dev`, `deno task dev`, serveur Rust/Go compilé, `npm_config_user_agent` (npm/pnpm/yarn/bun), `npm_lifecycle_script`, cwd `/` (app GUI) ⇒ nom d'app. Cas négatifs : port hors 3000–9999, process d'un autre uid, exclusions `/System/`.
 - **REQ-TST-17 (P0)** — **Merge de `settings.json` / `hooks.json`** : tests exhaustifs des installeurs — (a) fichier absent ⇒ créé (`hooks.json` avec `"version": 1`) ; (b) fichier existant avec clés utilisateur (`model`, `permissions`… — cas réel de cette machine **[VÉRIFIÉ]**) ⇒ préservées octet pour octet sémantique ; (c) hooks tiers présents ⇒ conservés, les nôtres ajoutés avec le marqueur `~/.agentdash/bin/agentdash-hook` ; (d) **idempotence** : double exécution = fichier identique ; (e) **réparation** : entrée AgentDash altérée ⇒ restaurée sans toucher au reste ; (f) désinstallation : seules nos entrées retirées ; (g) JSON malformé ⇒ **aucune écriture**, erreur remontée au Doctor ; (h) `.bak` horodaté créé avant la première écriture seulement ; (i) `disableAllHooks: true` détecté et signalé, jamais modifié.
 - **REQ-TST-18 (P1)** — **Framing NDJSON (DashCore)** : lignes > 64 Ko (jusqu'à 128 Ko), lectures partielles (1 octet à la fois), deux requêtes séquentielles sur deux connexions, permissions du socket (0600) et du dossier (0700), repli `$TMPDIR` si le chemin dépasse la limite `sun_path` (104 octets **[VÉRIFIÉ]**).
-- **REQ-TST-19 (P1)** — **LicensingKit** : (déjà cadré en `01-architecture.md` §9) rollback d'horloge, sommeil, reboot simulé, divergence Keychain/fichier ⇒ fusion pessimiste ; signature Ed25519 invalide ⇒ `tampered` ; ces tests utilisent exclusivement `ClockProvider` injecté.
+- **REQ-TST-19** — supprimé (décision one-shot du 3 juillet 2026).
 
 ### 2.5 Tests d'intégration — harnais hooks et bout-en-bout
 
@@ -83,7 +83,7 @@ Cadres retenus **[TRANCHÉ]** : **Swift Testing** (`import Testing`, fourni avec
 - **REQ-TST-38 (P1)** — Sur macOS 26, vérification spécifique de la branche `#available(macOS 26.0, *)` d'`agentGlass()` (Liquid Glass) **et** du fallback `NSVisualEffectView` (forcé via un réglage de debug) — les deux rendus doivent passer la checklist Appearance.
 - **REQ-TST-39 (P0)** — **CI** : à chaque PR — `swift test` de tous les packages (macOS 26, arm64) + build des 2 cibles Xcode + tests d'intégration HookRelay + lint des accents/orthographe des chaînes UI ; nightly — matrice unitaire macos-14/15/26 (runners GitHub), bancs de performance, snapshots. Aucun merge si un test P0 échoue.
 - **REQ-TST-40 (P0)** — **Couverture minimale** (mesurée par `swift test --enable-code-coverage`, gate CI) : machine à états DashCore ≥ 90 % de lignes ; parseurs AgentClaude/AgentCursor ≥ 85 % ; installeurs/merge ≥ 90 % ; UsageKit ≥ 85 % ; ServersKit (identification) ≥ 85 %. Pas d'objectif global artificiel sur l'UI.
-- **REQ-TST-41 (P0)** — **Critères de release** (gate final, tous obligatoires) : (1) 100 % des tests automatisés verts sur la CI de release ; (2) bancs de performance dans les budgets ; (3) checklist QA P0 exécutée sur ≥ 2 versions d'OS dont macOS 14 ; (4) matrice de compatibilité sans échec P0 ; (5) zéro bug P0 ouvert, bugs P1 documentés dans les notes de version ; (6) DMG signé + notarisé validé par `spctl -a -vv` et `stapler validate` sur une machine vierge ; (7) Doctor entièrement vert sur machine vierge après onboarding ; (8) test de mise à jour Sparkle depuis la version N−1 ; (9) vérification privacy : capture réseau (Proxyman/`tcpdump`) montrant **uniquement** les 4 destinations autorisées ; (10) hypothèses restantes marquées [HYPOTHÈSE] dans les plans : aucune ne conditionne une feature annoncée.
+- **REQ-TST-41 (P0)** — **Critères de release** (gate final, tous obligatoires) : (1) 100 % des tests automatisés verts sur la CI de release ; (2) bancs de performance dans les budgets ; (3) checklist QA P0 exécutée sur ≥ 2 versions d'OS dont macOS 14 ; (4) matrice de compatibilité sans échec P0 ; (5) zéro bug P0 ouvert, bugs P1 documentés dans les notes de version ; (6) DMG signé + notarisé validé par `spctl -a -vv` et `stapler validate` sur une machine vierge ; (7) Doctor entièrement vert sur machine vierge après onboarding ; (8) test de remplacement manuel de l'app N→N+1 (nouvelle `AgentDash.app` copiée dans `/Applications`) sans perte de réglages ; (9) vérification privacy : capture réseau (Proxyman/`tcpdump`) montrant **uniquement** les 2 destinations autorisées (`api.anthropic.com`, `cursor.com`) ; (10) hypothèses restantes marquées [HYPOTHÈSE] dans les plans : aucune ne conditionne une feature annoncée.
 - **REQ-TST-42 (P1)** — **Gestion du flaky** : un test instable est mis en quarantaine (tag `.flaky` + issue) sous 24 h ; un test en quarantaine > 2 semaines est réparé ou supprimé ; aucun retry automatique sur les tests unitaires, 1 retry maximum sur l'intégration.
 - **REQ-TST-43 (P2)** — **Tests de désinstallation/réparation** end-to-end : toggle hooks off ⇒ seules les entrées AgentDash disparaissent des configs ; suppression manuelle de `~/.agentdash/bin/agentdash-hook` ⇒ resynchronisation au lancement suivant (hash) ; corruption du binaire ⇒ idem.
 
@@ -266,7 +266,7 @@ Les vues NotchUI reçoivent leurs stores par environnement (déjà imposé par l
 | S13 | Panel | Quick Routes (chemins existants seulement) + Fast Actions (succès/échec) | home jetable partiel |
 | S14 | Menu bar popover | sections plates, point orange | 1 waiting |
 | S15 | Settings | chaque onglet (General/Notifications/Appearance/Usage/Shortcuts/Doctor/About) | réglages par défaut |
-| S16 | Fenêtres | onboarding, What's New, activation licence, écran fin d'essai | LicenseState de fixture |
+| S16 | Fenêtres | onboarding | fixtures d'onboarding |
 
 Chaque snapshot existe en clair/sombre ; S6 existe de plus en `wide`, `ultraWide`, `compact`, `colossal` et `glassOpacity = 1.0`.
 
@@ -320,9 +320,9 @@ Environnement : Mac Apple Silicon, vrai Claude Code (CLI + extension Cursor/VS C
 
 **QA-SET — Settings (features §10)** : chaque réglage a un effet immédiat et survit au redémarrage ; launch at login reflète l'état réel `SMAppService` ; enregistrement d'un raccourci en conflit → avertissement ; Doctor : chaque check passe au vert sur machine saine, chaque panne simulée (socket supprimé, binaire corrompu, hooks écrasés) est détectée avec correctif guidé.
 
-**QA-LIC — Onboarding & licence (features §11)** : premier lancement → welcome guidé ; trial 48 h → recul d'horloge système ne prolonge rien ; expiration → écran d'achat sans redémarrage ; activation → déblocage immédiat ; réactivation après « migration » simulée.
+**QA-ONB — Onboarding & mise à jour manuelle (features §11)** : premier lancement → welcome guidé ; remplacement manuel de `AgentDash.app` dans `/Applications` par la version N+1 → réglages, hooks et raccourcis conservés, `~/.agentdash/bin` resynchronisé au lancement, Doctor vert. *(QA-LIC — supprimé (décision one-shot du 3 juillet 2026).)*
 
-**QA-PRIV — Privacy (features §12)** : capture réseau sur une session complète → uniquement `api.anthropic.com`, `cursor.com`, appcast, Worker de licence ; chaque destination désactivable ; logs exportés sans aucun contenu de prompt/réponse/diff.
+**QA-PRIV — Privacy (features §12)** : capture réseau sur une session complète → uniquement `api.anthropic.com` et `cursor.com` (2 destinations, aucune autre) ; chaque destination désactivable (opt-out) ; logs exportés sans aucun contenu de prompt/réponse/diff.
 
 ### 4.3 Matrice de compatibilité (REQ-TST-37)
 
@@ -372,7 +372,7 @@ Environnement : Mac Apple Silicon, vrai Claude Code (CLI + extension Cursor/VS C
 
 ## 7. Dépendances (autres fichiers du plan) et risques
 
-**Dépendances entrantes** (ce document vérifie ce qu'ils spécifient) : `01-architecture.md` (budgets §6, stratégie §9, contrat IPC §4), `02-data-model.md` (machine à états, invariants — source des tables de tests), `03-integration-claude-code.md` et `04-integration-cursor.md` (payloads exacts des scénarios FakeAgent, installeurs), `05-notch-ui.md`/`06-menubar.md` (catalogue snapshot §4.1), `07-sessions.md`, `09-token-usage.md`, `10-local-servers.md`, `11-quick-routes-fast-actions.md`, ainsi que les documents actions inline, notifications, settings/doctor et distribution/licence (checklists QA-ACT, QA-NOTIF, QA-SET, QA-LIC et gates de notarisation).
+**Dépendances entrantes** (ce document vérifie ce qu'ils spécifient) : `01-architecture.md` (budgets §6, stratégie §9, contrat IPC §4), `02-data-model.md` (machine à états, invariants — source des tables de tests), `03-integration-claude-code.md` et `04-integration-cursor.md` (payloads exacts des scénarios FakeAgent, installeurs), `05-notch-ui.md`/`06-menubar.md` (catalogue snapshot §4.1), `07-sessions.md`, `09-token-usage.md`, `10-local-servers.md`, `11-quick-routes-fast-actions.md`, ainsi que les documents actions inline, notifications, settings/doctor et onboarding/distribution (checklists QA-ACT, QA-NOTIF, QA-SET, QA-ONB et gates de notarisation).
 **Dépendances sortantes** : `DashPaths`, `ClockProvider` généralisé, `AGENTDASH_SOCKET_OVERRIDE`, `AGENTDASH_TEST_MODE`/`dump-state` sont des exigences de testabilité que les documents d'implémentation doivent intégrer dès le squelette (coût quasi nul au départ, refactor coûteux après).
 
 **Risques** :
@@ -397,7 +397,7 @@ Environnement : Mac Apple Silicon, vrai Claude Code (CLI + extension Cursor/VS C
 | T7 | Tests UsageKit (jauges, rollover, mesures Cursor, alertes) (REQ-TST-15) | **M** |
 | T8 | Tests ServersKit par table + refactor identification pure (REQ-TST-16) | **M** |
 | T9 | Tests des installeurs/merge settings.json + hooks.json (REQ-TST-17) | **M** |
-| T10 | Tests framing NDJSON + LicensingKit horloge injectée (REQ-TST-18..19) | **M** |
+| T10 | Tests framing NDJSON (REQ-TST-18) | **M** |
 | T11 | Tests croisés HookRelay ↔ HookServer avec vrai binaire (REQ-TST-20) | **M** |
 | T12 | `FakeAgentHarness` + format scénarios YAML + scénarios P0 (REQ-TST-21) | **L** |
 | T13 | `TranscriptForge` (génération + append incrémental + corpus de perf) | **M** |

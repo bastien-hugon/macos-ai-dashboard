@@ -397,7 +397,7 @@ Cycle d'un refresh : `readAuthCredentials()` (DB locale) → absent ⇒ `notSign
 
 | # | Risque | Gravité | Mitigation |
 |---|---|---|---|
-| R1 | **Endpoints dashboard privés** (`cursor.com/api/*`) : rupture sans préavis, anti-bot, zone grise ToS | Élevée | décodage 100 % optionnel, sondes + health notice + rétention (REQ-CUR-38/49), repli legacy `/api/usage`, opt-out réseau ; releases correctives rapides via Sparkle ; documenter dans la FAQ que l'usage Cursor est « best effort » |
+| R1 | **Endpoints dashboard privés** (`cursor.com/api/*`) : rupture sans préavis, anti-bot, zone grise ToS | Élevée | décodage 100 % optionnel, sondes + health notice + rétention (REQ-CUR-38/49), repli legacy `/api/usage`, opt-out réseau ; releases correctives installées par remplacement manuel de l'app (modèle one-shot) ; documenter dans la FAQ que l'usage Cursor est « best effort » |
 | R2 | **Schéma `state.vscdb` non contractuel** (`_v: 16` observé, migrations passées avérées workspace → global) | Élevée | requêtes par clé uniquement, tolérance aux champs inconnus, `CursorCompat` + Doctor (REQ-CUR-18/48), fixtures de test par version de schéma |
 | R3 | Hooks de décision : timeout par défaut inconnu, arbitrage multi-scripts non documenté | Moyenne | timeout explicite 600 s + auto-libération `ask` ; banc d'essai dédié avant MVP (hypothèse n°2) |
 | R4 | `conversation_id ≠ composerId` (casserait la déduplication) | Moyenne | vérification au premier événement réel + corrélation par `workspace_roots`+fraîcheur en secours (hypothèse n°1) |
@@ -406,7 +406,7 @@ Cycle d'un refresh : `readAuthCredentials()` (DB locale) → absent ⇒ `notSign
 | R7 | JWT très longue durée lisible dans la DB : manipulation d'un secret sensible | Moyenne | lecture à la demande, zéro persistance/log, envoi exclusif à cursor.com (REQ-CUR-34) |
 | R8 | Divergence des mesures Spend/Weighted/Auto/API selon les plans (free/pro/ultra/business/enterprise) | Moyenne | mesures masquées si champ absent (REQ-CUR-36), tests sur plusieurs comptes réels avant release |
 
-**Stratégie de veille / version-pinning** : (1) `CursorCompat` versionné dans le code, mis à jour à chaque validation manuelle d'une nouvelle version de Cursor ; (2) surveillance hebdomadaire du changelog Cursor et de la page docs hooks (la doc hooks est officielle et versionnée — les hooks sont la surface la plus stable ; la DB et les endpoints sont les plus fragiles) ; (3) les sondes runtime (REQ-CUR-48/49) transforment toute rupture en item Doctor explicite au lieu d'un bug silencieux ; (4) aucun kill-switch distant (zéro télémétrie) — la réponse à une rupture est une release Sparkle.
+**Stratégie de veille / version-pinning** : (1) `CursorCompat` versionné dans le code, mis à jour à chaque validation manuelle d'une nouvelle version de Cursor ; (2) surveillance hebdomadaire du changelog Cursor et de la page docs hooks (la doc hooks est officielle et versionnée — les hooks sont la surface la plus stable ; la DB et les endpoints sont les plus fragiles) ; (3) les sondes runtime (REQ-CUR-48/49) transforment toute rupture en item Doctor explicite au lieu d'un bug silencieux ; (4) aucun kill-switch distant (zéro télémétrie) — la réponse à une rupture est une release corrective installée par remplacement manuel de l'app (modèle one-shot, décision du 3 juillet 2026).
 
 ---
 

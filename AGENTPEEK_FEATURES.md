@@ -303,7 +303,7 @@ Notifications système macOS natives, avec :
 
 ### Hors scope (spécifique AgentPeek)
 - Support Codex (`~/.codex/*`).
-- Licence 15 $ / trial / activation / Sparkle (à décider selon la distribution voulue).
+- Licence, trial, activation, auto-update (Sparkle) et site web — **DÉCISION du 3 juillet 2026 : hors scope définitif.** Modèle « one-shot » : mise à jour = désinstaller/remplacer l'app par la nouvelle version manuellement.
 
 ### Principes à conserver
 - 100 % local, zéro télémétrie, zéro compte.

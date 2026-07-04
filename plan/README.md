@@ -33,20 +33,20 @@
 | `11-quick-routes-fast-actions.md` | Quick Routes (raccourcis Finder vers `~/.claude/*` et `~/.cursor/*`, chemins existants seulement) et Fast Actions (commandes shell sauvegardées, runner zsh sécurisé). REQ-QRF. |
 | `12-notifications.md` | Notifications macOS natives : permission (actionnable Allow/Deny), budget, stuck, tâche terminée ; déduplication/throttling, retrait actif, hiérarchie des trois canaux d'attention. REQ-NOT. |
 | `13-settings.md` | Fenêtre Settings (sidebar 7 onglets, bouton power, effet immédiat) et onglet **Doctor** : 16 checks avec remèdes en un clic, dont le self-test IPC round-trip. REQ-SET. |
-| `14-onboarding-licensing-distribution.md` | Onboarding welcome guidé, trial 48 h anti-rollback, licence one-time 15 $ (Worker Cloudflare + Lemon Squeezy, reçu Ed25519 offline), Sparkle, pipeline DMG signé/notarisé + CI. REQ-LIC. |
+| `14-onboarding-distribution.md` | Onboarding welcome guidé (welcome → détection des agents → installation des hooks → permission notifications → terminé), mise à jour par **remplacement manuel** de l'app (resynchronisation de `~/.agentdash/bin` au lancement, réglages et `.bak` préservés — REQ-LIC-51+), pipeline simplifié : signature Developer ID si disponible, sinon ad hoc documentée ; notarisation/DMG/CI en P2. REQ-LIC. |
 | `15-testing-qa.md` | Stratégie de test : injection de chemins/horloge, fixtures anonymisées, harnais FakeAgent, snapshots, bancs de performance, checklist QA manuelle, matrice de compatibilité, 10 gates de release. REQ-TST. |
-| `16-roadmap-milestones.md` | **Roadmap M0 → M8** calquée sur le changelog AgentPeek : socle/notch → sessions Claude → hooks/Act → usage → serveurs/routes → menu bar/notifications → Settings/Doctor → Cursor → distribution 0.1.0. |
+| `16-roadmap-milestones.md` | **Roadmap M0 → M8** calquée sur le changelog AgentPeek : socle/notch → sessions Claude → hooks/Act → usage → serveurs/routes → menu bar/notifications → Settings/Doctor → Cursor → onboarding + packaging one-shot 0.1.0. |
 | `research/claude-code.md` | Recherche source : hooks Claude Code (événements, formats de réponse), transcripts JSONL, registre de sessions, Keychain OAuth, endpoint `/api/oauth/usage` — avec hypothèses numérotées n°1–10. |
 | `research/cursor.md` | Recherche source : hooks Cursor (`hooks.json`), schéma `state.vscdb` (`composerData`, `bubbleId`), transcripts, endpoints dashboard usage — hypothèses n°1–10. |
 | `research/notch-ui.md` | Recherche source : recettes `NSPanel` non-activant, `NSScreen.notchSize`, `NotchShape`, code inspecté de boring.notch/NotchDrop/DynamicNotchKit, `NSStatusItem`/`NSPopover`. |
 | `research/system-integration.md` | Recherche source : socket UNIX/IPC mesuré, libproc (scan de ports, identification de process), FSEvents, hotkeys Carbon, garde-fous de kill, notifications — hypothèses numérotées. |
-| `research/distribution-licensing.md` | Recherche source : Developer ID/notarisation/staple, Sparkle 2, DMG, anti-rollback d'horloge (`mach_continuous_time`), Lemon Squeezy + Worker — hypothèses n°1–14. |
+| `research/distribution-licensing.md` | Recherche source : Developer ID/notarisation/staple, DMG, `create-dmg`, CI headless — hypothèses numérotées. Les sections sur l'essai, l'activation et la chaîne de mise à jour intégrée sont **caduques depuis la décision one-shot du 3 juillet 2026** (conservées comme trace de recherche). |
 
 ---
 
 ## 3. Conventions
 
-- **Identifiants d'exigences** : `REQ-<DOMAINE>-NN`, uniques par fichier — VIS (vision, 00), CLA (Claude Code, 03), CUR (Cursor, 04), NUI (notch, 05), MBR (menu bar, 06), SES (sessions, 07), ACT (actions inline, 08), USG (usage, 09), SRV (serveurs, 10), QRF (Quick Routes/Fast Actions, 11), NOT (notifications, 12), SET (Settings/Doctor, 13), LIC (onboarding/licence/distribution, 14), TST (tests, 15). Références croisées sous la forme `fichier · REQ-XX-NN`.
+- **Identifiants d'exigences** : `REQ-<DOMAINE>-NN`, uniques par fichier — VIS (vision, 00), CLA (Claude Code, 03), CUR (Cursor, 04), NUI (notch, 05), MBR (menu bar, 06), SES (sessions, 07), ACT (actions inline, 08), USG (usage, 09), SRV (serveurs, 10), QRF (Quick Routes/Fast Actions, 11), NOT (notifications, 12), SET (Settings/Doctor, 13), LIC (onboarding/distribution, 14), TST (tests, 15). Références croisées sous la forme `fichier · REQ-XX-NN`. Les identifiants ne sont **jamais renumérotés** : une exigence retirée laisse une pierre tombale (ex. « … — supprimé (décision one-shot du 3 juillet 2026) »).
 - **Priorités** : **P0** = indispensable au MVP (parité v0.1.0) · **P1** = parité complète AgentPeek v0.2.11 · **P2** = raffinement/différé.
 - **Statuts factuels** : **[VÉRIFIÉ]** = adossé à une doc officielle, une source primaire ou une inspection/mesure locale · **[HYPOTHÈSE — à valider]** = déduction à confirmer par un banc `scripts/experiments/` avant l'implémentation dépendante · **[TRANCHÉ produit]** = valeur choisie par nous quand AgentPeek ne documente pas la sienne (ajustable). Aucune hypothèse ne doit jamais être présentée comme un fait — ni dans le plan, ni dans l'UI.
 - **Décisions d'architecture** : `A1`–`A11` (fichier 01 §10), fermes sauf mention « à calibrer ».
@@ -65,13 +65,13 @@
 | A4 | SwiftUI hébergé dans AppKit : `NSPanel` non-activant key-able pour le notch, `NSStatusItem` AppKit (pas de `MenuBarExtra`). |
 | A5 | Swift 6 strict concurrency ; stores `@Observable` sur MainActor ; toute l'ingestion en actors. |
 | A6 | macOS 14+, arm64 pur ; Liquid Glass via `agentGlass()` avec fallback `NSVisualEffectView` (macOS 26 non exigé). |
-| A7 | Pas de sandbox ; hardened runtime + Developer ID + notarisation ; DMG + Sparkle (checks horaires). |
+| A7 | Pas de sandbox ; hardened runtime ; signature Developer ID + notarisation quand le certificat est disponible (sinon signature ad hoc documentée) ; distribution DMG, mise à jour par remplacement manuel. |
 | A8 | Un projet Xcode + packages SPM locaux ; dépendances orientées `DashCore`, aucun import transverse (UI agnostique agent). |
 | A9 | Budgets : RAM < 150 Mo, CPU idle < 0,5 %, hook → UI < 150 ms, démarrage < 1 s / 100 Mo ; auto-mesure vers Doctor. |
 | A10 | **Fail-open absolu** : AgentDash ne peut jamais bloquer un agent ; santé par flux ; jauges qui retiennent la dernière valeur. |
-| A11 | Licence : Lemon Squeezy + Worker Cloudflare + reçu Ed25519 vérifié offline ; trial 48 h anti-rollback ; le tout isolé derrière `LICENSING_ENABLED`. |
+| A11 | Modèle « one-shot » (décision du 3 juillet 2026) : aucune infrastructure distante propre — ni serveur d'activation, ni site, ni mécanisme de mise à jour intégré ; mise à jour = remplacement manuel de `AgentDash.app`, resynchronisation de `~/.agentdash/bin` au lancement, réglages et `.bak` préservés. |
 
-Principes transverses complémentaires : déduplication structurelle par `SessionID` (`02 · §1.1`) ; `waiting` uniquement sur signal explicite, jamais par timeout (`02 · §3.3`) ; fusion **non destructive** des configs tierces + sauvegardes `.bak` (`00 · REQ-VIS-16/17`) ; réseau limité à 4 destinations désactivables (`00 · REQ-VIS-12`) ; testabilité imposée dès le squelette (`DashPaths`, `ClockProvider`, `15 · REQ-TST-01..04`).
+Principes transverses complémentaires : déduplication structurelle par `SessionID` (`02 · §1.1`) ; `waiting` uniquement sur signal explicite, jamais par timeout (`02 · §3.3`) ; fusion **non destructive** des configs tierces + sauvegardes `.bak` (`00 · REQ-VIS-16/17`) ; réseau limité à **2 destinations** opt-out — `api.anthropic.com` et `cursor.com` (`00 · REQ-VIS-12`) ; testabilité imposée dès le squelette (`DashPaths`, `ClockProvider`, `15 · REQ-TST-01..04`).
 
 ---
 
@@ -135,24 +135,21 @@ Chaque ligne renvoie au banc `scripts/experiments/` correspondant ; « jalon » 
 | Heuristique anti-faux-positif « stuck » au réveil de veille | 12 | M5 | Non |
 | Sémantique exacte des 3 valeurs de « prompt handling location » (interprétation propre) | 08, 13 | M2 (définie), M6 (validée) | Non |
 | Key equivalents ⌘W/⌘, sans barre de menus visible (`LSUIElement`) | 13 | M6 | Non |
-| API delegate Sparkle pour mémoriser « pas de mise à jour trouvée » | 13, 14 | M8 | Non |
 
-### Licence & distribution (`research/distribution-licensing.md`, fichier 14)
+### Distribution (`research/distribution-licensing.md`, fichier 14)
 
 | Hypothèse | Fichiers | Jalon | Bloquante |
 |---|---|---|---|
-| n°1/n°18 — Format exact des clés Lemon Squeezy (UUID v4 attendu) | 14 | M8 | Non (champ tolérant) |
-| n°3 — License API LS appelable sans clé API ? (la clé vit dans le Worker de toute façon) | 14 | M8 | Non |
-| n°5 — Keychain silencieux entre builds Debug/Release et après réinstallation | 14 | M8 | Non (repli fichier) |
 | n°9 — Prompt notifications/fenêtre au premier plan en `LSUIElement` sur macOS 26 | 12, 14 | M5/M8 | Non |
-| n°11 — `stapler staple` après signature EdDSA : ordre de la chaîne ①–⑧ | 14 | **M8** | Oui — chaîne d'update |
-| n°12 — Stabilité des URL d'assets GitHub pour `/download/latest` | 14 | M8 (P2) | Non |
-| n°13 — Suppression manuelle d'instance dans le dashboard LS | 14 | M8 | Non |
-| REQ-LIC-16 — En-tête HTTP `Date` comme high-water mark opportuniste | 14 | M8 (P2) | Non |
+
+> Les autres hypothèses de cette famille (n°1/3/5/11/12/13/18 et REQ-LIC-16 : clés et activation, chaîne de mise à jour intégrée, site de téléchargement) sont **retirées — décision one-shot du 3 juillet 2026**.
 
 ---
 
-## 6. Points d'attention connus
+## 6. Décisions produit
 
-- **Décision business ouverte** : distribution publique payante vs privée gratuite (`00 · T8/R8`) — à trancher avant le travail LicensingKit de M8 ; l'architecture est fermée quel que soit le choix (`14 · REQ-LIC-28`).
+- **3 juillet 2026 — AgentDash devient un logiciel « one-shot »** : ni essai, ni clé d'activation, ni serveur distant, ni site, ni mécanisme de mise à jour intégré — zéro infrastructure distante propre. Mise à jour = remplacement manuel de `AgentDash.app` dans `/Applications` ; `~/.agentdash/bin` est resynchronisé au lancement ; réglages et sauvegardes `.bak` survivent. Destinations réseau : **exactement deux, opt-out** — `api.anthropic.com` (usage Claude) et `cursor.com` (usage Cursor). Conséquences dans le plan : le fichier 14 est renommé `14-onboarding-distribution.md` ; REQ-LIC-11..38 et 47..50 retirées (pierres tombales) ; REQ-LIC-51+ = nouvelles exigences de mise à jour manuelle ; REQ-SET-67/71 remplacées par REQ-SET-72+ (About : version, logs, acknowledgements, texte de mise à jour manuelle) ; onboarding en cinq écrans sans étape de déblocage : welcome → détection des agents → installation des hooks → permission notifications → terminé. Cette décision clôt aussi la question business ouverte (`00 · T8/R8`).
+
+## 7. Points d'attention connus
+
 - **Nom définitif** : « AgentDash » est un nom de code ; le renommage (bundle id, tagline, marque) est la tâche `00 · T1`, à boucler avant toute distribution (risque juridique `00 · R6`).

@@ -17,7 +17,7 @@ Sections d'`AGENTPEEK_FEATURES.md` couvertes :
 - **§7** (Quick Routes Claude : `~/.claude/{skills,plugins,settings.json,projects}`, `~/.claude`) — la mécanique `NSWorkspace` est dans `11-quick-routes-fast-actions.md` ; ici, uniquement les chemins et leur existence ;
 - **§14.1, §14.4, §14.5, §14.6** (périmètre du clone côté Claude Code).
 
-Hors périmètre de ce fichier : rendu UI du notch (`05-notch-ui.md`), logique générique des jauges (`09-token-usage.md`), scan de ports (`10-local-servers.md`), licence, Sparkle.
+Hors périmètre de ce fichier : rendu UI du notch (`05-notch-ui.md`), logique générique des jauges (`09-token-usage.md`), scan de ports (`10-local-servers.md`).
 
 ---
 

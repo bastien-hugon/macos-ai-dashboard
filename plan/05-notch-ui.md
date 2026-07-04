@@ -72,7 +72,7 @@ Hors périmètre de ce fichier (traités ailleurs, la surface notch les *héberg
 | REQ-NUI-28 | **Hide when idle** (`pillHideWhenIdle == true`) : quand aucune session live n'est ≠ `idle` **et** qu'aucun `PendingPrompt` n'existe, le pill se réduit à la seule découpe physique (ailes fondues, largeur = notch exactement ; sur écran externe : encoche masquée complètement). Toute activité ou attention le fait réapparaître en fondu ≤ 300 ms. La zone de hover reste active (le survol rouvre normalement). [HYPOTHÈSE sur la sémantique exacte AgentPeek.] | P1 |
 | REQ-NUI-29 | **Expanded only** (`pillExpandedOnly == true`) : le pill ne dessine jamais d'ailes ni de contenu ; seul le panel étendu existe visuellement (hover/clic sur la zone du notch continue d'ouvrir). [HYPOTHÈSE sur la sémantique exacte.] | P2 |
 | REQ-NUI-30 | Rien d'important n'est dessiné dans la zone de la LED caméra (extrémité droite intérieure de la découpe) : la LED est physique et ne peut être recouverte. Les contenus des ailes gardent une marge intérieure ≥ 8 pt par rapport à la découpe. | P0 |
-| REQ-NUI-31 | Quand `LicenseState == .trialExpired`, le pill passe en rendu **grisé** (contenu désaturé, opacité 0,5) et le panel n'ouvre que l'écran d'achat (conforme à `02-data-model.md` §6). | P1 |
+| REQ-NUI-31 | — supprimé (décision one-shot du 3 juillet 2026 : ni trial ni licence — le pill n'est jamais verrouillé ni grisé pour une raison commerciale). | — |
 
 ### 2.5 Panel (état étendu)
 
@@ -147,7 +147,7 @@ public final class NotchPanel: NSPanel {
 @MainActor
 public final class NotchSurfaceCoordinator {
     public init(sessions: SessionStore, prompts: PromptStore, usage: UsageStore,
-                servers: ServerStore, settings: SettingsStore, license: LicenseStore)
+                servers: ServerStore, settings: SettingsStore)
     public func start()          // création des fenêtres, abonnements écran/veille
     public func stop()           // repli + orderOut (toggle notchEnabled off)
     public func open(reason: NotchOpenReason)   // .hover, .click, .attention, .settingsMirror
@@ -377,7 +377,7 @@ Padding externe 16 pt ; espacement inter-sections 12 pt (regular). Coins (19, 24
 
 ### 4.3 Textes exacts de l'interface (anglais)
 
-Vérifiés dans les features : « Show more » / « Show less », « Copy Session as Markdown », « resets in … », « refills Sun at 3:47 PM », « $X of $Y », « -- » (usage indisponible), « Deny with feedback ». Fixés par ce document [HYPOTHÈSE — wording AgentPeek exact non inspectable] : titres de section « SESSIONS », « USAGE », « LOCAL SERVERS », « QUICK ROUTES », « FAST ACTIONS » ; boutons de prompt « Allow », « Deny », « Always Allow », « Approve », « Reject », « Answer », « Open Terminal » ; état vide sessions « No active sessions — start an agent in your terminal or IDE » ; état vide serveurs : « No local servers » + « Dev servers on ports 3000–9999 will show up here. » (source canonique : 10-local-servers.md §4.4) ; trial expiré « Trial ended — Unlock AgentDash » (pill grisée).
+Vérifiés dans les features : « Show more » / « Show less », « Copy Session as Markdown », « resets in … », « refills Sun at 3:47 PM », « $X of $Y », « -- » (usage indisponible), « Deny with feedback ». Fixés par ce document [HYPOTHÈSE — wording AgentPeek exact non inspectable] : titres de section « SESSIONS », « USAGE », « LOCAL SERVERS », « QUICK ROUTES », « FAST ACTIONS » ; boutons de prompt « Allow », « Deny », « Always Allow », « Approve », « Reject », « Answer », « Open Terminal » ; état vide sessions « No active sessions — start an agent in your terminal or IDE » ; état vide serveurs : « No local servers » + « Dev servers on ports 3000–9999 will show up here. » (source canonique : 10-local-servers.md §4.4).
 
 ### 4.4 États visuels du pill
 
@@ -387,7 +387,6 @@ Vérifiés dans les features : « Show more » / « Show less », « Copy Sessio
 | ≥ 1 session `executing` | avatar **vert**, vague diagonale |
 | ≥ 1 session `thinking` (aucune executing) | avatar **cyan**, vague diagonale lente (0,5 Hz au lieu de 1,2 Hz) |
 | toutes `idle` | avatar **gris**, statique atténué (avatar pill figé, REQ-NUI-54) ; masqué si `pillHideWhenIdle` |
-| `trialExpired` | contenu désaturé, opacité 0,5, pas d'animation |
 | usage mode | jauges batterie vert → jaune (≥ 70 %) → rouge (≥ 90 %), teinte de seuil près de la limite |
 
 ### 4.5 Couleurs d'état (tokens `DashCore`, teintes adoucies v0.1.8)
@@ -472,7 +471,7 @@ Vérifiés dans les features : « Show more » / « Show less », « Copy Sessio
 
 **Dépendances entrantes** (ce que NotchUI consomme) :
 - `plan/01-architecture.md` — décisions A4 (NSPanel non-activant key-able), A6 (`agentGlass()`), A9 (budgets), threading §5 (stores MainActor observés).
-- `plan/02-data-model.md` — `Session`, `SessionState`, `PendingPrompt`, `AppSettings` (tous les réglages d'Appearance cités ici y sont définis), `LicenseState`.
+- `plan/02-data-model.md` — `Session`, `SessionState`, `PendingPrompt`, `AppSettings` (tous les réglages d'Appearance cités ici y sont définis).
 - Document **hooks/IPC** du plan — la latence hook → PromptStore conditionne REQ-NUI-20.
 - Document **sessions & timeline** — contenu des cartes et de la session étendue hébergées dans la section (3).
 - Document **actions inline** — contenu de la section prompt, raccourcis ⌘A/⌘N/⌥A/⌥T, hotkeys Carbon éphémères (NotchUI fournit `makeKey`/`resignKey` et l'ancrage visuel).
@@ -497,7 +496,7 @@ Vérifiés dans les features : « Show more » / « Show less », « Copy Sessio
 | N2 | Multi-écrans & cycle de vie | `NotchSurfaceCoordinator`, résolution des écrans porteurs, reconfiguration/veille avec restauration d'état, toggle `notchEnabled` (REQ-NUI-14…16) | **M** |
 | N3 | Machine à états & interactions | `NotchViewModel`, hover à délai d'intention, clic, `EventMonitors` clic extérieur, exceptions Settings/champ texte, interruptibilité (REQ-NUI-17…23) | **L** |
 | N4 | `NotchShape` & animations socle | forme animable, ressorts ouverture/fermeture, transitions de contenu, fondus de fenêtre, anti-overshoot, ombre SwiftUI (REQ-NUI-46…48) | **M** |
-| N5 | Pill complet | variantes count/usage/hide-when-idle/expanded-only, largeurs Auto/Wide/Ultra-wide, états visuels, zone LED, pill grisé trial (REQ-NUI-24…31) | **L** |
+| N5 | Pill complet | variantes count/usage/hide-when-idle/expanded-only, largeurs Auto/Wide/Ultra-wide, états visuels, zone LED (REQ-NUI-24…30 ; REQ-NUI-31 supprimé) | **L** |
 | N6 | Panel conteneur | header (horloge 12/24 h, refresh + shimmer), sections injectées `NotchSectionProviding`, scroll sans focus, fixed/growable, états vides (REQ-NUI-32…36, 39) | **L** |
 | N7 | Rendu verre & Appearance | `agentGlass()` (fallback + branche macOS 26), couche d'opacité + Opaque réel, frosted rim, depth-lit, `DensityMetrics`, graisse de titre, opacité des métriques, application immédiate (REQ-NUI-37, 38, 40…45) | **L** |
 | N8 | Avatars pixel-grid | `PixelAvatarView` (Canvas 5×5 identicon, vague/rotation/statique, ≤ 20 fps, pause cartes + fréquence réduite pill), intégration pill + cartes, teintes d'état (REQ-NUI-52…54) | **M** |
