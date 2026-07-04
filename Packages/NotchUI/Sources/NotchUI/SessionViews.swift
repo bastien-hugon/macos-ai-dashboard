@@ -102,6 +102,10 @@ struct SessionCardView: View {
         )
         .opacity(dimmed ? 0.55 : 1)
         .contentShape(RoundedRectangle(cornerRadius: 12))
+        // Accessibilité (REQ-NUI-57) : carte = élément unique avec label complet.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(AccessibilityLabels.sessionCard(session))
+        .accessibilityHint(isExpanded ? "Double-tap to collapse" : "Double-tap to expand")
     }
 
     // MARK: - Ligne principale

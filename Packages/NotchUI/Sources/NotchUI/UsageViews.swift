@@ -126,6 +126,9 @@ public struct UsageSectionView: View {
             Spacer()
         }
         .opacity(settings.metricsOpacity)
+        // Accessibilité (REQ-NUI-57) : jauge = élément unique.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(AccessibilityLabels.gauge(title: title, percentText: gauge.percentText, caption: gauge.caption))
     }
 
     private func title(_ kind: UsageWindowKind) -> String {

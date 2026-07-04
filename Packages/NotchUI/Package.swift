@@ -15,5 +15,9 @@ let package = Package(
             name: "NotchUI",
             dependencies: [.product(name: "DashCore", package: "DashCore")]
         ),
+        .testTarget(
+            name: "NotchUITests",
+            dependencies: ["NotchUI"]
+        ),
     ]
 )

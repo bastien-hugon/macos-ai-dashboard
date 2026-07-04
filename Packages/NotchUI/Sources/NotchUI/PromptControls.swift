@@ -18,6 +18,7 @@ struct PromptButton: View {
                 }
             }
             .padding(.horizontal, 11).padding(.vertical, 5)
+            .frame(minHeight: 24) // cible ≥ 24 pt (REQ-NUI-59)
             .background(
                 RoundedRectangle(cornerRadius: 8)
                     .fill(kind == .primary ? Color.accentColor.opacity(0.9) : Color.white.opacity(0.10))
@@ -27,6 +28,7 @@ struct PromptButton: View {
         .buttonStyle(.plain)
         .disabled(disabled)
         .opacity(disabled ? 0.4 : 1)
+        .accessibilityLabel(shortcut.map { "\(title), \($0)" } ?? title)
     }
 }
 

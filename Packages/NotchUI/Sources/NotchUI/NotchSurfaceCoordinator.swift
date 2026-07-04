@@ -193,6 +193,12 @@ public final class NotchSurfaceCoordinator {
         if becameActionable, settings.autoExpandOnAttention, handling != .terminalOnly {
             open(reason: .attention)
         }
+        // Annonce VoiceOver à l'apparition d'un prompt (REQ-NUI-57).
+        if becameActionable {
+            NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
+                                 userInfo: [.announcement: AccessibilityLabels.promptAnnouncement(prompt),
+                                            .priority: NSAccessibilityPriorityLevel.high.rawValue])
+        }
         // Le panel devient key pour router les frappes (sans activer l'app, REQ-NUI-55).
         for surface in surfaces.values where surface.vm.isExpanded {
             surface.panel.makeKeyIfNeeded()

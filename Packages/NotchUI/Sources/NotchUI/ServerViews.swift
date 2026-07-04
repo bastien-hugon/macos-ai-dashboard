@@ -105,9 +105,12 @@ struct ServerRowView: View {
             Image(systemName: symbol)
                 .font(.system(size: 11))
                 .foregroundStyle(.white.opacity(0.6))
+                .frame(width: 24, height: 24) // cible ≥ 24 pt (REQ-NUI-59)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(help)
+        .accessibilityLabel("\(help) \(server.url.absoluteString)")
     }
 }
 

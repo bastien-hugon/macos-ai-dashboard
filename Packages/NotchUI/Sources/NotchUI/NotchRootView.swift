@@ -16,6 +16,7 @@ public struct NotchRootView: View {
 
     @State private var hoverTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     /// Graine de l'identicon agrégé du pill (constante produit).
     static let pillSeed: UInt64 = 0xA6E1_7DA5
@@ -83,13 +84,14 @@ public struct NotchRootView: View {
             }
             // Présent pendant opening/panel/closing : sa hauteur naturelle est mesurée
             // pour cibler le resize ; retiré seulement une fois revenu à l'état pill.
+            // Reduced Motion : pas de scale, fondu simple (REQ-NUI-51).
             if vm.state != .pill {
                 panelContent
                     .frame(width: settings.panelWidth.points)
                     .fixedSize(horizontal: false, vertical: true)
                     .background(panelHeightReader)
                     .opacity(expanded ? 1 : 0)
-                    .scaleEffect(expanded ? 1 : 0.94, anchor: .top)
+                    .scaleEffect(reduceMotion ? 1 : (expanded ? 1 : 0.94), anchor: .top)
                     .allowsHitTesting(expanded)
             }
         }
@@ -106,6 +108,14 @@ public struct NotchRootView: View {
         .onHover { handleHover($0) }
         .onTapGesture {
             if !expanded { coordinator.open(reason: .click) } // REQ-NUI-19
+        }
+        // Accessibilité (REQ-NUI-57) : le pill est un élément unique avec label agrégé + action.
+        .accessibilityElement(children: expanded ? .contain : .ignore)
+        .accessibilityLabel(expanded ? "AgentDash panel" : pillAccessibilityLabel)
+        .accessibilityAddTraits(expanded ? [] : .isButton)
+        .accessibilityAction(named: expanded ? "Collapse panel" : "Expand panel") {
+            if expanded { coordinator.close(reason: .programmatic) }
+            else { coordinator.open(reason: .click) }
         }
         .shadow(color: .black.opacity(shadowOpacity), radius: shadowRadius) // REQ-NUI-50
         .background { panelSizeReader }
@@ -147,9 +157,10 @@ public struct NotchRootView: View {
     }
 
     /// Fond : pill = noir pur (REQ-NUI-24) ; panel = verre + voile noir (REQ-NUI-40/45).
+    /// Reduce Transparency force le rendu opaque (REQ-NUI-58).
     @ViewBuilder private var backgroundLayer: some View {
         ZStack {
-            if expanded && settings.glassOpacity < 1.0 {
+            if expanded && settings.glassOpacity < 1.0 && !reduceTransparency {
                 if #available(macOS 26.0, *) {
                     Color.clear.glassEffect(.regular, in: shape)
                 } else {
@@ -204,6 +215,11 @@ public struct NotchRootView: View {
     // MARK: - Pill
 
     private var showWings: Bool { !hiddenIdle && !settings.pillExpandedOnly }
+
+    /// Label VoiceOver agrégé du pill (REQ-NUI-57), ex. « AgentDash. 2 sessions running, 1 waiting for permission ».
+    private var pillAccessibilityLabel: String {
+        AccessibilityLabels.pill(sessions: sessions.displaySessions, hasPrompt: prompts.hasActionablePrompt)
+    }
 
     private var usageModeActive: Bool {
         settings.pillUsageMode && usage.hasAnyClaudeWindow

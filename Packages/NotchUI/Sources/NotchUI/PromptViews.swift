@@ -197,6 +197,7 @@ struct PermissionCardView: View {
                 .padding(8)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.black.opacity(0.4)))
                 .focused($feedbackFocused)
+                .onExitCommand { feedbackFocused = false } // Échap rend le focus (REQ-NUI-56)
             HStack {
                 PromptButton(title: "Send", shortcut: nil, kind: .primary) {
                     onDecision(.deny(feedback: feedback), .notch)
@@ -291,6 +292,7 @@ struct QuestionCardView: View {
                             .padding(6)
                             .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.4)))
                             .focused($focusedQuestion, equals: q.id)
+                            .onExitCommand { focusedQuestion = nil } // Échap rend le focus (REQ-NUI-56)
                     }
                 }
             }
