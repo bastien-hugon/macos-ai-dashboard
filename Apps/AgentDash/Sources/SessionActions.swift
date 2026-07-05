@@ -38,4 +38,43 @@ enum SessionActions {
         NSWorkspace.shared.open(URL(fileURLWithPath: session.projectPath ?? NSHomeDirectory(), isDirectory: true))
         _ = program
     }
+
+    /// Ouvre/focus la conversation dans son app hôte (bouton « Open », REQ-ACT-23).
+    /// La logique de route (deep-link extension Claude vs focus workspace Cursor) est
+    /// dans `ConversationRoute` (DashCore, testée unitairement).
+    static func openConversation(_ session: Session) {
+        guard let route = ConversationRoute.route(for: session) else { return }
+        DashLog.file("act: open conversation \(session.id.nativeID) → \(route)", category: "act")
+        execute(route)
+    }
+
+    private static func execute(_ route: ConversationRoute) {
+        switch route {
+        case .deepLink(let url):
+            NSWorkspace.shared.open(url)
+        case .activate(let appName):
+            launchApp(named: appName, arguments: [])
+        case .focusWorkspace(let appName, let folder, let thenOpen):
+            // `open -a <app> <dossier>` : l'app (VS Code/Cursor) réutilise et focus la
+            // fenêtre existante du workspace au lieu d'en ouvrir une seconde.
+            launchApp(named: appName, arguments: [folder])
+            if let thenOpen {
+                // Laisser la fenêtre prendre le focus pour que le deep-link y atterrisse.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    NSWorkspace.shared.open(thenOpen)
+                }
+            }
+        }
+    }
+
+    /// `/usr/bin/open -a <app> [args…]` — résolution du nom d'app par LaunchServices,
+    /// sans dépendre du chemin d'installation. Les labels d'affichage (`SessionHost`) sont
+    /// mappés vers le vrai nom de bundle quand ils diffèrent.
+    private static func launchApp(named appName: String, arguments: [String]) {
+        let launchNames = ["VS Code": "Visual Studio Code"]
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = ["-a", launchNames[appName] ?? appName] + arguments
+        try? process.run()
+    }
 }

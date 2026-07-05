@@ -490,7 +490,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         onKill: { SessionActions.kill($0, store: sessions) },
                         onCopyMarkdown: { SessionActions.copyMarkdown($0) },
                         onDismiss: { sessions.dismiss($0.id) },
-                        onOpenTerminal: { SessionActions.openTerminal($0) }
+                        onOpenTerminal: { SessionActions.openTerminal($0) },
+                        onOpen: { SessionActions.openConversation($0) }
                     )
                 }
             },

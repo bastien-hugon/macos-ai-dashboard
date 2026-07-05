@@ -10,6 +10,7 @@ public struct SessionListView: View {
     let onCopyMarkdown: (Session) -> Void
     let onDismiss: (Session) -> Void
     let onOpenTerminal: (Session) -> Void
+    let onOpen: (Session) -> Void
 
     @State private var expandedID: SessionID?
 
@@ -17,13 +18,15 @@ public struct SessionListView: View {
                 onKill: @escaping (Session) -> Void = { _ in },
                 onCopyMarkdown: @escaping (Session) -> Void = { _ in },
                 onDismiss: @escaping (Session) -> Void = { _ in },
-                onOpenTerminal: @escaping (Session) -> Void = { _ in }) {
+                onOpenTerminal: @escaping (Session) -> Void = { _ in },
+                onOpen: @escaping (Session) -> Void = { _ in }) {
         self.store = store
         self.settings = settings
         self.onKill = onKill
         self.onCopyMarkdown = onCopyMarkdown
         self.onDismiss = onDismiss
         self.onOpenTerminal = onOpenTerminal
+        self.onOpen = onOpen
     }
 
     /// Hauteur max de la liste avant scroll interne (07 · REQ-NUI-34 `.fixed`) : évite que
@@ -47,7 +50,8 @@ public struct SessionListView: View {
                             session: session,
                             metrics: metrics,
                             settings: settings,
-                            isExpanded: expandedID == session.id
+                            isExpanded: expandedID == session.id,
+                            onOpen: onOpen
                         )
                         .onTapGesture {
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
@@ -55,6 +59,9 @@ public struct SessionListView: View {
                             }
                         }
                         .contextMenu {
+                            if ConversationRoute.route(for: session) != nil {
+                                Button("Open Conversation") { onOpen(session) }
+                            }
                             Button("Copy Session as Markdown") { onCopyMarkdown(session) }
                             Button("Open Terminal") { onOpenTerminal(session) }
                             if session.pid != nil, session.liveness.isLive {
@@ -86,6 +93,7 @@ struct SessionCardView: View {
     let metrics: DensityMetrics
     let settings: SettingsStore
     let isExpanded: Bool
+    var onOpen: (Session) -> Void = { _ in }
 
     private var dimmed: Bool { !session.liveness.isLive }
 
@@ -190,6 +198,26 @@ struct SessionCardView: View {
                 ElapsedText(since: session.startedAt) // REQ-SES-27
                     .font(metrics.metricFont)
                     .foregroundStyle(.white.opacity(settings.metricsOpacity * 0.7))
+            }
+            // Open : focus la conversation dans son app hôte (REQ-ACT-23) —
+            // seulement quand une route existe (Claude terminal exclu).
+            if ConversationRoute.route(for: session) != nil {
+                Button {
+                    onOpen(session)
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "arrow.up.forward.app")
+                            .font(.system(size: 8, weight: .semibold))
+                        Text("Open")
+                            .font(metrics.metricFont)
+                    }
+                    .foregroundStyle(.white.opacity(0.75))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2.5)
+                    .background(Capsule().fill(Color.white.opacity(0.1)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open conversation in \(session.host.label)")
             }
         }
     }
