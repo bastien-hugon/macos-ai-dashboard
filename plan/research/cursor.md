@@ -300,18 +300,22 @@ C'est exactement le modèle « lecture via la session Mac existante, pas de logi
 
 ### 3.2 Endpoints (non officiels, mêmes endpoints que le dashboard web — **sujets à changement**)
 
-Aucune requête réelle n'a été faite ; formats issus de code open-source lu et de la doc communautaire.
+Formats initialement issus de code open-source ; les lignes marquées **[VÉRIFIÉ — API réelle 5 juil. 2026]**
+ont été confirmées par requêtes réelles sur cette machine (compte Team, rôle membre).
 
 | Endpoint | Méthode / corps | Réponse (champs) | Statut |
 |---|---|---|---|
 | `https://cursor.com/api/usage-summary` | GET | `billingCycleStart` / `billingCycleEnd` (dates ISO ou epoch ms en string), `membershipType`, `limitType` (`user`\|`team`), `isUnlimited`, `individualUsage.plan { enabled, used, limit, remaining (cents), breakdown { included, bonus, total }, autoPercentUsed?, apiPercentUsed?, totalPercentUsed? }`, `individualUsage.onDemand { enabled, used, limit, remaining }`, `teamUsage` | **[VÉRIFIÉ — OSS]** (Raycast `cursor-costs`, types + appels lus) |
-| `https://cursor.com/api/dashboard/get-aggregated-usage-events` | POST `{ "teamId": -1, "startDate": <ms>, "endDate": <ms> }` | `aggregations[] { modelIntent, inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, totalCents }`, `totalInputTokens`, `totalOutputTokens`, `totalCacheWriteTokens`, `totalCacheReadTokens`, `totalCostCents` | **[VÉRIFIÉ — OSS]** (idem) |
+| ~~`get-aggregated-usage-events`~~ | POST `{ "teamId": -1, … }` | **MORT (5 juil. 2026)** : renvoie `{}` quel que soit le corps. Remplacé par `get-filtered-usage-events` ci-dessous | 🪦 **[VÉRIFIÉ — API réelle 5 juil. 2026]** |
+| `https://cursor.com/api/dashboard/get-filtered-usage-events` | POST `{ "startDate": <ms>, "endDate": <ms>, "page": 1, "pageSize": 100 }` — **SANS `teamId`** (le passer ⇒ 401 « Team ID is required ») | `totalUsageEventsCount`, `usageEventsDisplay[] { timestamp (string ms), model, kind, maxMode, requestsCosts, usageBasedCosts ("$1.67"), isTokenBasedCall, tokenUsage { inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, totalCents }, owningUser, owningTeam, chargedCents, conversationId }`. **Scopé à l'utilisateur authentifié** ; paginé (cap serveur 100/page, `pageSize` ≤ ~500) | **[VÉRIFIÉ — API réelle 5 juil. 2026]** — utilisé par `CursorUsagePoller.fetchTodayEvents` |
+| `https://cursor.com/api/dashboard/teams` | POST `{}` | `teams[] { name, id (numérique), role, seats, adminOnlyUsagePricing, … }` | **[VÉRIFIÉ — API réelle 5 juil. 2026]** — découverte du `teamId` |
+| `https://cursor.com/api/dashboard/get-team-spend` | POST `{ "teamId": n, "page": 1 }` | `teamMemberSpend[] { userId (numérique), name, email, role, spendCents (cycle en cours), includedSpendCents, billingTier, *PercentUsed }`, `subscriptionCycleStart`, `totalPages` | **[VÉRIFIÉ — API réelle 5 juil. 2026]** — dépense team du cycle ; accessible aux membres non-admin. ⚠️ Le quotidien team-wide reste admin-only (`adminOnlyUsagePricing`) |
 | `https://cursor.com/api/dashboard/get-monthly-invoice` | POST `{ "month": n, "year": n, "includeUsageEvents": false }` | `items[] { cents, description }`, `hasUnpaidMidMonthInvoice` | **[VÉRIFIÉ — OSS]** (`Dwtexe/cursor-stats`) |
 | `https://cursor.com/api/usage?user=<userId>` | GET | legacy « requests » : objet par modèle (ex. `gpt-4`) avec `numRequests`, `maxRequestUsage`, `numTokens` ; `startOfMonth` | **[VÉRIFIÉ — OSS]** — endpoint historique, AgentPeek l'a remplacé (« replaces the legacy feed », v0.2.10) |
 | `https://cursor.com/api/auth/stripe` | GET | métadonnées d'abonnement (statut `active`/`trialing`/…) | **[VÉRIFIÉ — OSS]** |
 | Divers : `get-hard-limit`, `set-hard-limit`, `get-usage-based-premium-requests`, `export-usage-events-csv`, `api2.cursor.sh/...GetCurrentPeriodUsage` | POST/GET | limites de dépense, export CSV | **[VÉRIFIÉ — OSS]**, utilité secondaire |
 
-Officiel mais hors périmètre individuel : Admin API / Analytics API d'équipe (`/teams/spend`, `/teams/daily-usage-data`, `/teams/filtered-usage-events`) — nécessite un rôle admin d'équipe, non pertinent pour AgentDash mono-utilisateur.
+Officiel mais hors périmètre individuel : Admin API / Analytics API d'équipe (`/teams/spend`, `/teams/daily-usage-data`, `/teams/filtered-usage-events`) — nécessite un rôle admin d'équipe. Exception vérifiée : `dashboard/get-team-spend` (cycle en cours) est lisible par un simple membre — c'est la source du « $ team » affiché entre parenthèses dans le notch.
 
 ### 3.3 Notions Spend / Weighted / Auto / API et « $X of $Y »
 
@@ -378,7 +382,7 @@ Correspondance proposée pour les 4 mesures d'AgentPeek (à valider avec de vrai
 5. **Liste de sessions** = `composer.composerHeaders.allComposers` (poll léger, ~1–2 s quand une session est active) enrichie en temps réel par les hooks ; clé de déduplication = `composerId` (= `conversation_id` des hooks, à confirmer) ; masquer `isDraft`/`isArchived`/`isBestOfNSubcomposer` ; rattacher les entrées avec `subagentInfo` à leur `rootParentConversationId`.
 6. **Timeline des tool calls** : événements hooks en direct + relecture historique via `fullConversationHeadersOnly` → `bubbleId:*` (champ `toolFormerData`), avec table de traduction des noms d'outils (`run_terminal_command_v2` → « Ran command », etc.).
 7. **Usage mensuel** : lire `cursorAuth/accessToken` dans `ItemTable`, dériver `userId` du `sub` JWT, cookie `WorkosCursorSessionToken=<userId>%3A%3A<jwt>` ; appeler `usage-summary` (jauges Spend/Weighted/Auto/API + cycle de facturation) et `get-aggregated-usage-events` (`teamId: -1`, du `billingCycleStart` à maintenant) pour le détail par modèle ; retenir la dernière valeur en cas d'échec (comportement AgentPeek) ; jamais d'écriture, jamais d'envoi du token ailleurs que cursor.com.
-8. **Stats journalières** : source locale gratuite `aiCodeTracking.dailyStats.v1.5.*` (lignes suggérées/acceptées) + agrégats quotidiens de `get-aggregated-usage-events` si besoin de dollars/jour.
+8. **Stats journalières** : source locale gratuite `aiCodeTracking.dailyStats.v1.5.*` (lignes suggérées/acceptées) + agrégats quotidiens de `get-filtered-usage-events` (paginé, Σ côté client — l'agrégé serveur est mort, §3.2) si besoin de dollars/jour.
 9. **Tokens par session Cursor** : ne pas promettre l'équivalent Claude Code au départ — `tokenCount` des bulles est vide ; utiliser `contextTokensUsed`/`promptTokenBreakdown` (contexte) et, si nécessaire, les événements d'usage réseau pour le coût. À trancher après le point « Hypothèses » n° 3.
 10. **Plans et questions Cursor** : afficher (via `hasPendingPlan`, tool `ask_question`/`create_plan` détecté par `preToolUse`) mais **ne pas** promettre approve/reject ni réponse inline tant que l'hypothèse n° 4 n'est pas tranchée.
 
@@ -386,7 +390,7 @@ Correspondance proposée pour les 4 mesures d'AgentPeek (à valider avec de vrai
 
 1. **`conversation_id` (hooks) == `composerId` (state.vscdb)** — corréler en déclenchant un hook réel.
 2. **Timeout par défaut des hooks** (« platform default » non chiffré) : mesurer, et vérifier qu'un `timeout` élevé permet à un hook de permission de bloquer plusieurs minutes sans être tué ni faire dériver l'agent (fail-open !). Vérifier aussi le comportement quand plusieurs scripts répondent des permissions contradictoires.
-3. **Comptage de tokens par tour** : confirmer qu'aucune source locale fiable n'existe (bulles à 0) ; sinon, dériver du réseau (`get-aggregated-usage-events` par période courte) ou renoncer au live mid-turn pour Cursor.
+3. **Comptage de tokens par tour** : confirmer qu'aucune source locale fiable n'existe (bulles à 0) ; sinon, dériver du réseau (`get-filtered-usage-events` par période courte) ou renoncer au live mid-turn pour Cursor.
 4. **Questions/plans** : `preToolUse` se déclenche-t-il sur `ask_question`/`create_plan` ? Une réponse `updated_input`/`deny` permet-elle une interaction utile ? Sinon, où l'état « waiting-question » est-il visible en DB (bulle `ask_question` avec `toolFormerData.status == "loading"` ?).
 5. **Fiabilité dynamique de `hasBlockingPendingActions` / `hasPendingPlan` / `generatingBubbleIds` / `status`** : fréquence d'écriture réelle pendant un tour (la DB est-elle flushée en continu ou par lots ?) — conditionne la latence de l'état sans hooks.
 6. **Sessions du CLI `cursor-agent`** (non installé ici) : écrit-il dans le même `state.vscdb` / `~/.cursor/projects`, et les hooks `~/.cursor/hooks.json` s'y appliquent-ils ? (`agentBackend: "cursor-agent"` observé côté app laisse penser que le backend est partagé.)
