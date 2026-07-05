@@ -46,12 +46,16 @@ public final class UsageStore {
     public private(set) var daily: [DailyUsage] = []
 
     /// Usage du jour par agent (ligne inline du notch) : tokens + dépense.
+    /// `teamCostUSD` (Cursor uniquement) : dépense de toute la team sur le cycle en cours,
+    /// affichée entre parenthèses (le quotidien team n'est pas exposé aux membres non-admin).
     public struct TodayUsage: Equatable, Sendable {
         public var tokens: Int
         public var costUSD: Double?
-        public init(tokens: Int, costUSD: Double? = nil) {
+        public var teamCostUSD: Double?
+        public init(tokens: Int, costUSD: Double? = nil, teamCostUSD: Double? = nil) {
             self.tokens = tokens
             self.costUSD = costUSD
+            self.teamCostUSD = teamCostUSD
         }
     }
     public private(set) var today: [AgentKind: TodayUsage] = [:]

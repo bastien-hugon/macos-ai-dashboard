@@ -100,10 +100,15 @@ public struct UsageInlineView: View {
                     .frame(width: 11, height: 11)
                 Text(UsageFormat.dollars(today.costUSD ?? 0))
                     .foregroundStyle(.white.opacity(0.9))
+                // Dépense de toute la team sur le cycle en cours (entre parenthèses).
+                if let team = today.teamCostUSD {
+                    Text("(\(UsageFormat.dollars(team)))")
+                        .foregroundStyle(.white.opacity(0.5))
+                }
                 Text(DashFormat.tokens(today.tokens))
                     .foregroundStyle(.white.opacity(0.65))
             }
-            .help("Cursor — spend today · tokens today")
+            .help("Cursor — your spend today (team spend this cycle) · your tokens today")
         }
     }
 
@@ -113,7 +118,11 @@ public struct UsageInlineView: View {
             parts.append("Claude session \(gauge.percentText), \(DashFormat.tokens(usage.today[.claude]?.tokens ?? 0)) tokens today")
         }
         if let cursor = usage.today[.cursor] {
-            parts.append("Cursor \(UsageFormat.dollars(cursor.costUSD ?? 0)) and \(DashFormat.tokens(cursor.tokens)) tokens today")
+            var line = "Cursor \(UsageFormat.dollars(cursor.costUSD ?? 0)) and \(DashFormat.tokens(cursor.tokens)) tokens today"
+            if let team = cursor.teamCostUSD {
+                line += ", team \(UsageFormat.dollars(team)) this cycle"
+            }
+            parts.append(line)
         }
         return parts.isEmpty ? "No usage data" : parts.joined(separator: ". ")
     }

@@ -54,6 +54,13 @@ public final class SessionStore {
         let cutoff = Date(timeIntervalSinceNow: -24 * 3600)
         return sessions.filter { session in
             guard !session.isDismissed else { return false }
+            // Cursor marque tous ses composers `.live` à vie (pas de notion de fin fiable
+            // dans `state.vscdb`) : sans ce garde, tout l'historique de conversations idle
+            // encombrerait le panel. On n'affiche donc que les sessions Cursor actives
+            // (waiting/executing) — les convos au repos restent lisibles côté Cursor.
+            if session.id.agent == .cursor {
+                return session.state != .idle
+            }
             if session.liveness.isLive { return true }
             return session.lastEventAt > cutoff
         }

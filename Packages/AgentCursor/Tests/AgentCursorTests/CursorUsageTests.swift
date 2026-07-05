@@ -56,21 +56,52 @@ struct CursorUsageDecodeTests {
         #expect(CursorUsagePoller.parseCycleDate(NSNumber(value: 1_785_000_000_000)) != nil)
     }
 
-    @Test("decodeTodayEvents : tokens + cents du jour, tolérant aux strings")
-    func todayEvents() throws {
-        let events = try CursorUsagePoller.decodeTodayEvents(Data("""
-        { "aggregations": [{"modelIntent": "claude-4.5-sonnet", "inputTokens": 1000, "outputTokens": 200, "totalCents": 124}],
-          "totalInputTokens": 25000, "totalOutputTokens": 5100, "totalCostCents": 1240.5 }
+    @Test("get-filtered-usage-events : agrège tokens (input+output) + Σ usageBasedCosts")
+    func todayEvents() {
+        // Forme réelle (vérifiée 5 juil. 2026) : usageEventsDisplay[] avec tokenUsage + usageBasedCosts.
+        let (events, total) = CursorUsagePoller.decodePage(Data("""
+        { "totalUsageEventsCount": 2, "usageEventsDisplay": [
+            {"usageBasedCosts": "$1.67", "tokenUsage": {"inputTokens": 4, "outputTokens": 8226,
+                "cacheReadTokens": 212935, "cacheWriteTokens": 217313, "totalCents": 167}},
+            {"usageBasedCosts": "$3.59", "tokenUsage": {"inputTokens": 100, "outputTokens": 900}}
+        ]}
         """.utf8))
-        #expect(events.tokens == 30_100)
-        #expect(abs(events.costUSD - 12.405) < 0.001)
+        #expect(total == 2)
+        let agg = CursorUsagePoller.aggregateEvents(events)
+        #expect(agg.tokens == 9230)                 // 4+8226 + 100+900 (cache exclu, parité Claude)
+        #expect(abs(agg.costUSD - 5.26) < 0.001)    // 1.67 + 3.59
 
-        // Variante avec nombres en strings (tolérance).
-        let stringy = try CursorUsagePoller.decodeTodayEvents(Data("""
-        { "totalInputTokens": "800", "totalOutputTokens": "200", "totalCostCents": "50" }
-        """.utf8))
-        #expect(stringy.tokens == 1000)
-        #expect(stringy.costUSD == 0.5)
+        // Tolérance : coût numérique, tokens en strings, coût absent.
+        let agg2 = CursorUsagePoller.aggregateEvents([
+            ["usageBasedCosts": 2.5, "tokenUsage": ["inputTokens": "10", "outputTokens": "5"]],
+            ["tokenUsage": ["inputTokens": 1, "outputTokens": 1]], // pas de coût → 0
+        ])
+        #expect(agg2.tokens == 17)
+        #expect(agg2.costUSD == 2.5)
+    }
+
+    @Test("aggregateEvents : filtre défensif par owningUser")
+    func aggregateFiltersByUser() {
+        let events: [[String: Any]] = [
+            ["owningUser": 369_567_629, "usageBasedCosts": "$1.00", "tokenUsage": ["inputTokens": 10, "outputTokens": 5]],
+            ["owningUser": 999, "usageBasedCosts": "$8.00", "tokenUsage": ["inputTokens": 100, "outputTokens": 100]],
+        ]
+        // Sans filtre : tout compté.
+        let all = CursorUsagePoller.aggregateEvents(events)
+        #expect(all.tokens == 215)
+        #expect(abs(all.costUSD - 9.0) < 0.001)
+        // Avec userId : seuls mes events.
+        let mine = CursorUsagePoller.aggregateEvents(events, userId: 369_567_629)
+        #expect(mine.tokens == 15)
+        #expect(abs(mine.costUSD - 1.0) < 0.001)
+    }
+
+    @Test("decodePage : réponse vide → aucun événement")
+    func emptyPage() {
+        let (events, total) = CursorUsagePoller.decodePage(Data("{}".utf8))
+        #expect(events.isEmpty)
+        #expect(total == 0)
+        #expect(CursorUsagePoller.aggregateEvents(events) == CursorUsagePoller.TodayEvents(tokens: 0, costUSD: 0))
     }
 
     @Test("extraction du sub JWT (userId)")

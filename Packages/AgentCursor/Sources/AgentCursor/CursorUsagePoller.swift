@@ -105,23 +105,102 @@ public actor CursorUsagePoller: UsageProvider {
         return try Self.decode(data, account: "cursor:\(creds.userId)", measure: measure(), now: Date())
     }
 
-    // MARK: - Usage du jour (get-aggregated-usage-events, research §3.2)
+    // MARK: - Usage du jour (get-filtered-usage-events, research §3.2)
+    //
+    // ⚠️ `get-aggregated-usage-events` (teamId:-1) renvoie désormais `{}` (endpoint mort,
+    //    vérifié le 5 juil. 2026). L'usage du jour vient de `get-filtered-usage-events`
+    //    (SANS `teamId` — le passer déclenche un 401 « Team ID is required ») : une liste
+    //    paginée `usageEventsDisplay[]` où chaque événement porte `tokenUsage` et
+    //    `usageBasedCosts` (dépense usage-based réelle, string « $1.67 »).
 
     public struct TodayEvents: Equatable, Sendable {
-        public var tokens: Int       // input + output du jour
-        public var costUSD: Double   // totalCostCents / 100
+        public var tokens: Int       // input + output du jour (parité notch Claude)
+        public var costUSD: Double   // Σ usageBasedCosts (dépense usage-based réelle)
     }
 
-    /// Dépense et tokens du jour (depuis minuit locale) via l'endpoint dashboard.
-    public func fetchTodayEvents(now: Date = Date()) async throws -> TodayEvents {
+    private static let eventsPageSize = 100
+    private static let eventsPageCap = 20 // garde-fou (max 2000 events/jour)
+
+    /// Dépense et tokens du jour (depuis minuit locale) via l'endpoint dashboard, paginé.
+    /// `userId` (optionnel) : filtre défensif — l'endpoint est déjà scopé à l'utilisateur
+    /// authentifié, mais si on connaît son id numérique on ne garde que ses events
+    /// (`owningUser`), garantissant que le compteur ne reflète JAMAIS un autre membre.
+    public func fetchTodayEvents(now: Date = Date(), userId: Int? = nil) async throws -> TodayEvents {
         let creds = try readCredentials()
         let startOfDay = Calendar.current.startOfDay(for: now)
         let body: [String: Any] = [
-            "teamId": -1,
             "startDate": Int(startOfDay.timeIntervalSince1970 * 1000),
             "endDate": Int(now.timeIntervalSince1970 * 1000),
         ]
-        var request = URLRequest(url: URL(string: "https://cursor.com/api/dashboard/get-aggregated-usage-events")!)
+
+        var events: [[String: Any]] = []
+        var total = Int.max
+        var page = 1
+        while events.count < total, page <= Self.eventsPageCap {
+            var pageBody = body
+            pageBody["page"] = page
+            pageBody["pageSize"] = Self.eventsPageSize
+            let data = try await post("dashboard/get-filtered-usage-events", body: pageBody, creds: creds)
+            let (pageEvents, pageTotal) = Self.decodePage(data)
+            events.append(contentsOf: pageEvents)
+            total = pageTotal
+            if pageEvents.isEmpty { break } // plus rien à paginer (protège si total surestimé)
+            page += 1
+        }
+        return Self.aggregateEvents(events, userId: userId)
+    }
+
+    // MARK: - Dépense de la team (cycle en cours)
+    //
+    // ⚠️ Un membre NON-admin ne peut PAS lire les events quotidiens des autres membres
+    //    (`get-filtered-usage-events` est scopé à soi ; `adminOnlyUsagePricing` sur la team).
+    //    Seul le total *cycle-de-facturation* par membre est lisible via `get-team-spend`.
+    //    On expose donc la dépense team « ce cycle », pas « du jour ».
+
+    public struct TeamSpend: Equatable, Sendable {
+        public var cycleCostUSD: Double // Σ spendCents des membres / 100
+        public var myUserId: Int?       // id numérique de l'utilisateur courant (par email)
+    }
+
+    /// Dépense totale de la team sur le cycle en cours (+ résout l'id numérique de l'user).
+    /// `nil` si l'utilisateur n'appartient à aucune team.
+    public func fetchTeamSpend() async throws -> TeamSpend? {
+        let creds = try readCredentials()
+        guard let teamId = try await fetchPrimaryTeamId(creds: creds) else { return nil }
+
+        var members: [[String: Any]] = []
+        var totalPages = 1
+        var page = 1
+        repeat {
+            let data = try await post("dashboard/get-team-spend",
+                                      body: ["teamId": teamId, "page": page], creds: creds)
+            guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { break }
+            members.append(contentsOf: root["teamMemberSpend"] as? [[String: Any]] ?? [])
+            totalPages = (root["totalPages"] as? NSNumber)?.intValue ?? 1
+            page += 1
+        } while page <= totalPages && page <= Self.eventsPageCap
+
+        let cents = members.reduce(0.0) { sum, m in
+            sum + ((m["spendCents"] as? NSNumber)?.doubleValue ?? 0)
+        }
+        let myUserId = creds.email.flatMap { email in
+            members.first { ($0["email"] as? String)?.caseInsensitiveCompare(email) == .orderedSame }
+        }.flatMap { ($0["userId"] as? NSNumber)?.intValue }
+        return TeamSpend(cycleCostUSD: cents / 100, myUserId: myUserId)
+    }
+
+    /// Première team de l'utilisateur (`dashboard/teams`) → `id` numérique.
+    private func fetchPrimaryTeamId(creds: Credentials) async throws -> Int? {
+        let data = try await post("dashboard/teams", body: [:], creds: creds)
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let teams = root["teams"] as? [[String: Any]] else { return nil }
+        return teams.compactMap { ($0["id"] as? NSNumber)?.intValue }.first
+    }
+
+    // MARK: - Requête POST dashboard partagée (cookie WorkOS + en-têtes navigateur)
+
+    private func post(_ path: String, body: [String: Any], creds: Credentials) async throws -> Data {
+        var request = URLRequest(url: URL(string: "https://cursor.com/api/\(path)")!)
         request.httpMethod = "POST"
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -141,27 +220,51 @@ public actor CursorUsagePoller: UsageProvider {
         }
         guard let http = response as? HTTPURLResponse else { throw UsageError.network("réponse non HTTP") }
         switch http.statusCode {
-        case 200: break
+        case 200: return data
         case 401, 403: throw UsageError.unauthorized
         case 429: throw UsageError.rateLimited(retryAfter: nil)
         default: throw UsageError.network("HTTP \(http.statusCode)")
         }
-        return try Self.decodeTodayEvents(data)
     }
 
-    /// Décodage tolérant (nombres parfois sérialisés en strings).
-    nonisolated static func decodeTodayEvents(_ data: Data) throws -> TodayEvents {
+    /// Extrait `(usageEventsDisplay, totalUsageEventsCount)` d'une page (pur, testable).
+    nonisolated static func decodePage(_ data: Data) -> (events: [[String: Any]], total: Int) {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw UsageError.decoding(field: nil)
+            return ([], 0)
         }
-        func number(_ key: String) -> Double {
-            if let n = root[key] as? NSNumber { return n.doubleValue }
-            if let s = root[key] as? String, let d = Double(s) { return d }
+        let events = root["usageEventsDisplay"] as? [[String: Any]] ?? []
+        let total = (root["totalUsageEventsCount"] as? NSNumber)?.intValue
+            ?? Int((root["totalUsageEventsCount"] as? String) ?? "") ?? events.count
+        return (events, total)
+    }
+
+    /// Agrège tokens (input+output) et dépense (Σ usageBasedCosts) — pur, testable,
+    /// tolérant aux nombres sérialisés en strings. Si `userId` est fourni, ne compte que
+    /// les events dont `owningUser` correspond (garde-fou multi-membres).
+    nonisolated static func aggregateEvents(_ events: [[String: Any]], userId: Int? = nil) -> TodayEvents {
+        func int(_ any: Any?) -> Int {
+            if let n = any as? NSNumber { return n.intValue }
+            if let s = any as? String, let i = Int(s) { return i }
             return 0
         }
-        let tokens = Int(number("totalInputTokens") + number("totalOutputTokens"))
-        let costCents = number("totalCostCents")
-        return TodayEvents(tokens: tokens, costUSD: costCents / 100)
+        var tokens = 0
+        var costUSD = 0.0
+        for event in events {
+            if let userId, int(event["owningUser"]) != userId { continue }
+            if let usage = event["tokenUsage"] as? [String: Any] {
+                tokens += int(usage["inputTokens"]) + int(usage["outputTokens"])
+            }
+            costUSD += parseDollars(event["usageBasedCosts"])
+        }
+        return TodayEvents(tokens: tokens, costUSD: costUSD)
+    }
+
+    /// « $1.67 » / « $1,234.50 » / 1.67 → Double (0 si absent/illisible).
+    nonisolated static func parseDollars(_ raw: Any?) -> Double {
+        if let n = raw as? NSNumber { return n.doubleValue }
+        guard let s = raw as? String else { return 0 }
+        let cleaned = s.filter { $0.isNumber || $0 == "." || $0 == "-" }
+        return Double(cleaned) ?? 0
     }
 
     // MARK: - Décodage (pur, testable)

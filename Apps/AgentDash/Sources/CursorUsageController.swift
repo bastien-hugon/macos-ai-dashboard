@@ -7,6 +7,8 @@ actor CursorUsageController {
     private let poller: CursorUsagePoller
     private let store: UsageStore
     private var loopTask: Task<Void, Never>?
+    /// Dépense team (cycle) + id numérique de l'user, rafraîchis à chaque poll (échec toléré).
+    private var teamSpend: CursorUsagePoller.TeamSpend?
 
     init(paths: DashPaths, store: UsageStore, measure: @escaping @Sendable () -> CursorUsageMeasure) {
         self.poller = CursorUsagePoller(paths: paths, measure: measure)
@@ -43,11 +45,22 @@ actor CursorUsageController {
         } catch {
             await store.markFailure(.cursor, .network(error.localizedDescription))
         }
+        // Dépense team (cycle) + résolution de l'userId — échec non bloquant, valeur conservée.
+        if let spend = try? await poller.fetchTeamSpend() {
+            teamSpend = spend
+        }
+
         // Dépense + tokens du jour (ligne inline) — échec non bloquant.
+        // Filtre défensif sur l'userId résolu pour ne refléter QUE l'utilisateur courant.
         do {
-            let today = try await poller.fetchTodayEvents()
-            DashLog.file("usage: Cursor today $\(String(format: "%.2f", today.costUSD)) \(today.tokens) tokens", category: "usage")
-            await store.setToday(.cursor, UsageStore.TodayUsage(tokens: today.tokens, costUSD: today.costUSD))
+            let today = try await poller.fetchTodayEvents(userId: teamSpend?.myUserId)
+            let teamCost = teamSpend?.cycleCostUSD
+            DashLog.file(
+                "usage: Cursor today $\(String(format: "%.2f", today.costUSD)) \(today.tokens) tokens"
+                    + (teamCost.map { " (team cycle $\(String(format: "%.2f", $0)))" } ?? ""),
+                category: "usage")
+            await store.setToday(.cursor, UsageStore.TodayUsage(
+                tokens: today.tokens, costUSD: today.costUSD, teamCostUSD: teamCost))
         } catch {
             DashLog.file("usage: Cursor today ÉCHEC \(error)", category: "usage")
         }
