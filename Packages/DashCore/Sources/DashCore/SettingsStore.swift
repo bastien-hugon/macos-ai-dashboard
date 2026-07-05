@@ -152,7 +152,7 @@ public final class SettingsStore {
         budgetThreshold5h = int("budgetThreshold5h", 80)
         budgetThreshold7d = int("budgetThreshold7d", 80)
         cursorUsageEnabled = bool("cursorUsageEnabled", true)
-        cursorMeasure = defaults.string(forKey: Self.prefixed("cursorMeasure")) ?? "weighted"
+        cursorMeasure = Self.cursorMeasureRawValue(defaults: defaults)
         menuBarShowsUsage = bool("menuBarShowsUsage", true)
         notificationsMasterEnabled = bool("notificationsMasterEnabled", true)
         notificationSoundEnabled = bool("notificationSoundEnabled", true)
@@ -183,7 +183,13 @@ public final class SettingsStore {
         hideFromScreenRecording = bool("hideFromScreenRecording", false)
     }
 
-    private static func prefixed(_ key: String) -> String { "agentdash.\(key)" }
+    nonisolated private static func prefixed(_ key: String) -> String { "agentdash.\(key)" }
+
+    /// Lecture thread-safe de `cursorMeasure` (UserDefaults) pour les closures Sendable
+    /// appelées hors MainActor (poller d'usage Cursor, M7).
+    nonisolated public static func cursorMeasureRawValue(defaults: UserDefaults = .standard) -> String {
+        defaults.string(forKey: prefixed("cursorMeasure")) ?? "weighted"
+    }
 
     private func save(_ value: some Any, _ key: String) {
         defaults.set(value, forKey: Self.prefixed(key))

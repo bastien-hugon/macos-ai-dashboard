@@ -243,7 +243,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Usage Cursor mensuel (M7) : session locale → endpoint dashboard, si Cursor présent.
         if settings.cursorUsageEnabled, FileManager.default.fileExists(atPath: paths.cursorGlobalStorageDB.path) {
             let controller = CursorUsageController(paths: paths, store: usage) {
-                CursorUsageMeasure(rawValue: settings.cursorMeasure) ?? .weighted
+                CursorUsageMeasure(rawValue: SettingsStore.cursorMeasureRawValue()) ?? .weighted
             }
             cursorUsageController = controller
             Task { await controller.start() }
