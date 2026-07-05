@@ -97,6 +97,11 @@ struct SettingsView: View {
                 }
             }
             Divider()
+            Toggle("Auto-accept permissions — Claude Code", isOn: bind(\.autoAcceptClaude))
+                .help("Automatically allows Claude Code permission requests without asking. Plans and questions still require your input.")
+            Toggle("Auto-accept permissions — Cursor", isOn: bind(\.autoAcceptCursor))
+                .help("Automatically allows Cursor permission requests without asking. Plans and questions still require your input.")
+            Divider()
             Toggle("Claude Code hooks", isOn: bind(\.claudeHooksEnabled))
                 .help("Installs hooks in ~/.claude/settings.json")
             Divider()

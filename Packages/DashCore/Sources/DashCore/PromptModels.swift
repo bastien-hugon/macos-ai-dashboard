@@ -159,7 +159,20 @@ public enum PromptDecision: Sendable {
 }
 
 public enum DecisionSource: String, Sendable {
-    case notch, hotkey, notification, terminal, timeout
+    case notch, hotkey, notification, terminal, timeout, auto
+}
+
+/// Garde de l'auto-accept opt-in (par agent) : seules les demandes de **permission** sont
+/// auto-acceptées — jamais les plans ni les questions (décisions de contenu qui méritent
+/// un humain). Fonction pure, testée dans DashCoreTests.
+public enum AutoAcceptGate {
+    public static func shouldAutoAccept(_ prompt: PendingPrompt, claudeEnabled: Bool, cursorEnabled: Bool) -> Bool {
+        guard case .permission = prompt.payload else { return false }
+        switch prompt.sessionID.agent {
+        case .claude: return claudeEnabled
+        case .cursor: return cursorEnabled
+        }
+    }
 }
 
 public enum PermissionOutcome: Sendable {

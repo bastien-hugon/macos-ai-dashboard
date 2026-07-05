@@ -76,6 +76,11 @@ public final class SettingsStore {
     public var onboardingCompleted: Bool { didSet { save(onboardingCompleted, "onboardingCompleted") } }
     /// Hooks Claude Code installés dans ~/.claude/settings.json (03 · REQ-CLA-01).
     public var claudeHooksEnabled: Bool { didSet { save(claudeHooksEnabled, "claudeHooksEnabled") } }
+    /// Auto-accept opt-in PAR AGENT : répond « allow » aux demandes de PERMISSION sans
+    /// interaction (les plans et questions restent affichés — décisions de contenu).
+    /// Off par défaut ; basculable depuis le notch et Settings.
+    public var autoAcceptClaude: Bool { didSet { save(autoAcceptClaude, "autoAcceptClaude") } }
+    public var autoAcceptCursor: Bool { didSet { save(autoAcceptCursor, "autoAcceptCursor") } }
 
     // Usage (M3)
     public var claudeUsageEnabled: Bool { didSet { save(claudeUsageEnabled, "claudeUsageEnabled") } }
@@ -147,6 +152,8 @@ public final class SettingsStore {
         promptHandling = raw("promptHandling", PromptHandling.both)
         onboardingCompleted = bool("onboardingCompleted", false)
         claudeHooksEnabled = bool("claudeHooksEnabled", true)
+        autoAcceptClaude = bool("autoAcceptClaude", false)
+        autoAcceptCursor = bool("autoAcceptCursor", false)
         claudeUsageEnabled = bool("claudeUsageEnabled", true)
         countdownFrom100 = bool("countdownFrom100", false)
         budgetThreshold5h = int("budgetThreshold5h", 80)

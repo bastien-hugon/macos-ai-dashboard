@@ -67,6 +67,16 @@ public final class PromptStore {
         remove(id)
     }
 
+    /// Accepte immédiatement les PERMISSIONS en attente des agents dont l'auto-accept est
+    /// actif — couvre la bascule du toggle alors que des prompts sont déjà en file
+    /// (les nouveaux prompts sont interceptés à l'ingestion, avant enqueue). Tick 1 s.
+    public func autoAcceptPending(claude: Bool, cursor: Bool) {
+        guard claude || cursor else { return }
+        for prompt in prompts where AutoAcceptGate.shouldAutoAccept(prompt, claudeEnabled: claude, cursorEnabled: cursor) {
+            decide(prompt.id, .allow, via: .auto)
+        }
+    }
+
     /// Auto-libération des prompts arrivés à expiration (REQ-ACT-07) — tick 1 s.
     public func releaseExpired(now: Date) {
         for prompt in prompts where prompt.expiresAt <= now {

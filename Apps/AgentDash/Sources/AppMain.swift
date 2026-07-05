@@ -222,6 +222,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var lastSnapshotSave = Date.distantPast
         releaseTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
+                // Bascule d'un toggle auto-accept avec des prompts déjà en file → flush.
+                prompts.autoAcceptPending(claude: settings.autoAcceptClaude, cursor: settings.autoAcceptCursor)
                 prompts.releaseExpired(now: Date())
                 usage.rolloverIfNeeded(now: Date())
                 self?.checkStuckSessions(sessions: sessions, notifications: notifications)
@@ -373,6 +375,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         request.reply(nil)
                         return
                     }
+                    // Auto-accept opt-in par agent : répond « allow » aux permissions sans
+                    // les surfacer (plans/questions passent toujours par l'humain).
+                    if AutoAcceptGate.shouldAutoAccept(
+                        prompt, claudeEnabled: settings.autoAcceptClaude, cursorEnabled: settings.autoAcceptCursor
+                    ) {
+                        request.reply(DecisionEncoder.encode(.allow, for: prompt))
+                        DashLog.file(
+                            "act: auto-accept \(prompt.sessionID.agent.rawValue) — \(prompt.sessionLabel)",
+                            category: "act")
+                        return
+                    }
                     sessions.markWaiting(prompt.sessionID)
                     request.onRemoteClose = { [weak prompts] in
                         Task { @MainActor in prompts?.retire(prompt.id, outcome: .released) }
@@ -494,6 +507,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         onOpen: { SessionActions.openConversation($0) }
                     )
                 }
+            },
+            // Auto-accept opt-in par agent (permissions uniquement, AutoAcceptGate).
+            NotchSection(id: "autoAccept", title: nil, isEmpty: false) {
+                AutoAcceptRow(settings: settings)
             },
             // La section Usage a été remplacée par la ligne inline centrée en haut du panel
             // (UsageInlineView dans le header) ; les jauges détaillées restent dans le
