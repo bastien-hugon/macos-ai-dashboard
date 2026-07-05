@@ -113,6 +113,8 @@ struct SettingsView: View {
 
     @State private var newActionTitle = ""
     @State private var newActionCommand = ""
+    /// Bumpé à chaque (dé)branchement d'écran → rafraîchit la liste du displayPicker.
+    @State private var screenListVersion = 0
 
     private var fastActionsEditor: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -205,6 +207,9 @@ struct SettingsView: View {
             Divider()
             Toggle("24-hour clock", isOn: bind(\.clock24h))
             Toggle("Show on all screens", isOn: bind(\.showOnAllScreens))
+            displayPicker
+                .disabled(settings.showOnAllScreens)
+                .help("Which display carries the notch UI. External displays get a floating pill at the top center.")
             Toggle("Show session count in pill", isOn: bind(\.pillShowsSessionCount))
             Toggle("Usage mode in pill", isOn: bind(\.pillUsageMode))
             Toggle("Hide pill when idle", isOn: bind(\.pillHideWhenIdle))
@@ -223,6 +228,39 @@ struct SettingsView: View {
             }
             Toggle("Hide from screen recording", isOn: bind(\.hideFromScreenRecording))
         }
+    }
+
+    /// Choix de l'écran porteur du notch (REQ-NUI-14/16) : intégré/principal, écran actif,
+    /// ou un écran précis par UUID stable (survit aux reconnexions ; écran absent →
+    /// retombée intégré/principal dans le coordinateur). Liste rafraîchie à chaque
+    /// (dé)branchement d'écran.
+    @ViewBuilder private var displayPicker: some View {
+        let _ = screenListVersion // dépendance : re-render quand les écrans changent
+        Picker("Display", selection: Binding(
+            get: { settings.preferredScreen.rawValue },
+            set: { settings.preferredScreen = PreferredScreen(rawValue: $0) ?? .builtinThenMain }
+        )) {
+            Text("Built-in (or main)").tag(PreferredScreen.builtinThenMain.rawValue)
+            Text("Active screen").tag(PreferredScreen.active.rawValue)
+            let named = NSScreen.screens.compactMap { screen in
+                screen.displayUUID.map { (uuid: $0, screen: screen) }
+            }
+            if !named.isEmpty {
+                Divider()
+                ForEach(named, id: \.uuid) { entry in
+                    Text("\(entry.screen.localizedName)\(entry.screen.isBuiltinDisplay ? " (built-in)" : "")")
+                        .tag(PreferredScreen.uuid(entry.uuid).rawValue)
+                }
+            }
+            // Écran choisi mais actuellement débranché : rester sélectionnable/visible.
+            if case .uuid(let selected) = settings.preferredScreen,
+               !named.contains(where: { $0.uuid == selected }) {
+                Text("Disconnected display").tag(PreferredScreen.uuid(selected).rawValue)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSApplication.didChangeScreenParametersNotification
+        )) { _ in screenListVersion &+= 1 }
     }
 
     // MARK: - Usage

@@ -29,6 +29,8 @@ public final class NotchSurfaceCoordinator {
     private var screenSnapshot: [String: CGRect] = [:]
     private var defaultCenterObserver: NSObjectProtocol?
     private var workspaceObserver: NSObjectProtocol?
+    /// Coupe la boucle d'observation des réglages d'écran après `stop()`.
+    private var running = false
 
     /// Le panel reste ouvert tant que la fenêtre Settings est key (REQ-NUI-21) — câblé en M6.
     public var settingsWindowIsKey: Bool = false
@@ -58,7 +60,9 @@ public final class NotchSurfaceCoordinator {
     // MARK: - Cycle de vie
 
     public func start() {
+        running = true
         rebuildSurfaces(restoreExpanded: false)
+        observeScreenSettings()
 
         defaultCenterObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -87,6 +91,7 @@ public final class NotchSurfaceCoordinator {
     }
 
     public func stop() {
+        running = false
         if let defaultCenterObserver {
             NotificationCenter.default.removeObserver(defaultCenterObserver)
         }
@@ -283,6 +288,23 @@ public final class NotchSurfaceCoordinator {
         guard snapshot != screenSnapshot else { return }
         DashLog.ui.notice("reconfiguration d'écrans détectée")
         rebuildSurfaces(restoreExpanded: true)
+    }
+
+    /// Applique À CHAUD un changement de préférence d'écran depuis Settings (REQ-NUI-44) :
+    /// observation one-shot ré-armée après chaque déclenchement.
+    private func observeScreenSettings() {
+        guard running else { return }
+        withObservationTracking {
+            _ = settings.showOnAllScreens
+            _ = settings.preferredScreen
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self, self.running else { return }
+                DashLog.ui.notice("préférence d'écran modifiée → reconstruction des surfaces")
+                self.rebuildSurfaces(restoreExpanded: true)
+                self.observeScreenSettings()
+            }
+        }
     }
 
     private func currentScreenSnapshot() -> [String: CGRect] {
